@@ -1,0 +1,266 @@
+version: "4.1"
+name: Recovery
+type: ARM
+deviceName: null
+packDir: null
+srcDirs: []
+virtualFolder:
+  name: <virtual_root>
+  files: []
+  folders:
+    - name: Application
+      files: []
+      folders:
+        - name: CubeMX
+          files:
+            - path: Core/Src/crc.c
+            - path: Core/Src/gpio.c
+            - path: Core/Src/iwdg.c
+            - path: Core/Src/rtc.c
+            - path: Core/Src/stm32f4xx_hal_msp.c
+            - path: Core/Src/system_stm32f4xx.c
+            - path: Core/Src/tim.c
+          folders: []
+        - name: Compiler
+          files:
+            - path: Compiler/startup_stm32f407xx.s
+          folders: []
+        - name: User
+          files:
+            - path: Core/Src/main.c
+            - path: Core/Src/stm32f4xx_it.c
+            - path: Core/Src/syscalls.c
+            - path: Core/Src/sysmem.c
+          folders: []
+        - name: lwip
+          files:
+            - path: LWIP/App/lwip.c
+            - path: LWIP/Target/ethernetif.c
+          folders: []
+    - name: Drivers
+      files: []
+      folders:
+        - name: HAL_Driver
+          files:
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_crc.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_eth.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_iwdg.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
+          folders: []
+        - name: BSP
+          files: []
+          folders:
+            - name: DP83848
+              files:
+                - path: Drivers/BSP/Components/dp83848/dp83848.c
+              folders: []
+            - name: Protocol
+              files:
+                - path: Drivers/BSP/Protocol/protocol.c
+              folders: []
+            - name: RingBuff
+              files:
+                - path: Drivers/BSP/RingBuffer/Ringbuffer.c
+              folders: []
+    - name: Middlewares
+      files: []
+      folders:
+        - name: LWIP
+          files: []
+          folders:
+            - name: api
+              files:
+                - path: Middlewares/Third_Party/LwIP/src/api/api_lib.c
+                - path: Middlewares/Third_Party/LwIP/src/api/api_msg.c
+                - path: Middlewares/Third_Party/LwIP/src/api/err.c
+                - path: Middlewares/Third_Party/LwIP/src/api/if_api.c
+                - path: Middlewares/Third_Party/LwIP/src/api/netbuf.c
+                - path: Middlewares/Third_Party/LwIP/src/api/netdb.c
+                - path: Middlewares/Third_Party/LwIP/src/api/netifapi.c
+                - path: Middlewares/Third_Party/LwIP/src/api/sockets.c
+                - path: Middlewares/Third_Party/LwIP/src/api/tcpip.c
+              folders: []
+            - name: app
+              files:
+                - path: Middlewares/Third_Party/LwIP/src/apps/mqtt/mqtt.c
+              folders: []
+            - name: core
+              files:
+                - path: Middlewares/Third_Party/LwIP/src/core/altcp.c
+                - path: Middlewares/Third_Party/LwIP/src/core/altcp_alloc.c
+                - path: Middlewares/Third_Party/LwIP/src/core/altcp_tcp.c
+                - path: Middlewares/Third_Party/LwIP/src/core/def.c
+                - path: Middlewares/Third_Party/LwIP/src/core/dns.c
+                - path: Middlewares/Third_Party/LwIP/src/core/inet_chksum.c
+                - path: Middlewares/Third_Party/LwIP/src/core/init.c
+                - path: Middlewares/Third_Party/LwIP/src/core/ip.c
+                - path: Middlewares/Third_Party/LwIP/src/core/mem.c
+                - path: Middlewares/Third_Party/LwIP/src/core/memp.c
+                - path: Middlewares/Third_Party/LwIP/src/core/netif.c
+                - path: Middlewares/Third_Party/LwIP/src/core/pbuf.c
+                - path: Middlewares/Third_Party/LwIP/src/core/raw.c
+                - path: Middlewares/Third_Party/LwIP/src/core/stats.c
+                - path: Middlewares/Third_Party/LwIP/src/core/sys.c
+                - path: Middlewares/Third_Party/LwIP/src/core/tcp.c
+                - path: Middlewares/Third_Party/LwIP/src/core/tcp_in.c
+                - path: Middlewares/Third_Party/LwIP/src/core/tcp_out.c
+                - path: Middlewares/Third_Party/LwIP/src/core/timeouts.c
+                - path: Middlewares/Third_Party/LwIP/src/core/udp.c
+              folders:
+                - name: ipv4
+                  files:
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv4/autoip.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv4/dhcp.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv4/etharp.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv4/icmp.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv4/igmp.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv4/ip4.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv4/ip4_addr.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv4/ip4_frag.c
+                  folders: []
+                - name: ipv6
+                  files:
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv6/dhcp6.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv6/ethip6.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv6/icmp6.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv6/inet6.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv6/ip6.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv6/ip6_addr.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv6/ip6_frag.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv6/mld6.c
+                    - path: Middlewares/Third_Party/LwIP/src/core/ipv6/nd6.c
+                  folders: []
+            - name: netif
+              files:
+                - path: Middlewares/Third_Party/LwIP/src/netif/bridgeif.c
+                - path: Middlewares/Third_Party/LwIP/src/netif/bridgeif_fdb.c
+                - path: Middlewares/Third_Party/LwIP/src/netif/ethernet.c
+                - path: Middlewares/Third_Party/LwIP/src/netif/lowpan6.c
+                - path: Middlewares/Third_Party/LwIP/src/netif/lowpan6_ble.c
+                - path: Middlewares/Third_Party/LwIP/src/netif/lowpan6_common.c
+                - path: Middlewares/Third_Party/LwIP/src/netif/slipif.c
+                - path: Middlewares/Third_Party/LwIP/src/netif/zepif.c
+              folders:
+                - name: ppp
+                  files:
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/auth.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/ccp.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/chap_ms.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/chap-md5.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/chap-new.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/demand.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/eap.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/ecp.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/eui64.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/fsm.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/ipcp.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/ipv6cp.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/lcp.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/magic.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/mppe.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/multilink.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/ppp.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/pppapi.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/pppcrypt.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/pppoe.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/pppol2tp.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/pppos.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/upap.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/utils.c
+                    - path: Middlewares/Third_Party/LwIP/src/netif/ppp/vj.c
+                  folders: []
+dependenceList: []
+outDir: build
+miscInfo:
+  uid: 510ec07e60a3ebd3f10047946db50aec
+targets:
+  Debug:
+    cppPreprocessAttrs:
+      defineList:
+        - USE_HAL_DRIVER
+        - STM32F407xx
+      incList:
+        - Core/Inc
+        - Drivers/CMSIS/Device/ST/STM32F4xx/Include
+        - Drivers/CMSIS/Include
+        - Drivers/STM32F4xx_HAL_Driver/Inc
+        - Drivers/BSP/Components/dp83848
+        - LWIP/App
+        - LWIP/Target
+        - Middlewares/Third_Party/LwIP/src/include
+        - Middlewares/Third_Party/LwIP/system
+        - Drivers/BSP/Protocol
+        - Drivers/BSP/RingBuffer
+      libList: []
+    excludeList: []
+    toolchain: GCC
+    toolchainConfigMap:
+      GCC:
+        archExtensions: ""
+        cpuType: Cortex-M4
+        floatingPointHardware: single
+        options:
+          version: 5
+          afterBuildTasks: []
+          asm-compiler: {}
+          beforeBuildTasks: []
+          c/cpp-compiler:
+            language-c: c17
+            language-cpp: c++17
+            no-exceptions: true
+            no-rtti: true
+            no-threadsafe-statics: true
+            no-use-cxa-atexit: true
+            one-elf-section-per-data: true
+            one-elf-section-per-function: true
+            optimization: level-debug
+            warnings: all-warnings
+          global:
+            $float-abi-type: hard
+            arm-thumb-interwork: true
+            arm-thumb-mode: thumb
+            not-use-syscalls: true
+            output-debug-info: enable
+            use-newlib-nano: true
+          linker:
+            $toolName: auto
+            LIB_FLAGS: -lm
+            output-format: elf
+            remove-unused-input-sections: true
+        scatterFilePath: Compiler/STM32F407XX_FLASH.ld
+        storageLayout:
+          RAM: []
+          ROM: []
+        useCustomScatterFile: true
+    uploadConfigMap:
+      JLink:
+        baseAddr: ""
+        bin: ""
+        cpuInfo:
+          cpuName: "null"
+          vendor: "null"
+        otherCmds: ""
+        proType: 1
+        speed: 8000
+      OpenOCD:
+        baseAddr: "0x08000000"
+        bin: ""
+        interface: cmsis-dap
+        target: stm32f4x
+    uploader: OpenOCD
