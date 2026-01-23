@@ -25,7 +25,7 @@ bool Is_Config_Integrity(volatile const SysInfo_t *info)
     if (info->magic != CONFIG_MAGIC)
         return false;
 
-    crc32 = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(info) - sizeof(info->config_crc)) / 4);
+    crc32 = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(SysInfo_t) - sizeof(info->config_crc)) / 4);
     if (info->config_crc != crc32)
         return false;
 
@@ -54,7 +54,7 @@ void Init_Config_Info(SysInfo_t *info)
     memcpy(&(info->net_cfg), &net_info, sizeof(NetConfig_t));
 
     // 计算config info的crc校验值
-    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(info) - sizeof(info->config_crc)) / 4);
+    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(SysInfo_t) - sizeof(info->config_crc)) / 4);
 
     // 擦除config info所在扇区并将数据写入
     EraseConfigInfo();
@@ -103,7 +103,7 @@ HAL_StatusTypeDef WriteConfigInfo(SysInfo_t *info)
 
     // 按word将config info写入flash
     for (uint32_t i = 0; i < sizeof(SysInfo_t) / 4; i++) {
-        status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, ADDR_CONFIG_SECTOR + i, ((uint32_t *)info)[i]);
+        status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, ADDR_CONFIG_SECTOR + i * 4, ((uint32_t *)info)[i]);
 
         if (status != HAL_OK) {
             break; // 写入出错，退出
