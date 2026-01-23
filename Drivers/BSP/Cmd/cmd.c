@@ -21,6 +21,7 @@ static void cmd_SendReData(uint32_t ReSeq, uint32_t ReCmd, uint32_t ReLen, uint3
     IAP_ReTmp.seq         = ReSeq;
     IAP_ReTmp.cmd         = ReCmd;
     IAP_ReTmp.len         = ReLen;
+
     if (ReLen != 0)
         memcpy(IAP_ReTmp.data_crc, ReData, U8_LEN(ReLen));
     uint32_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)IAP_ReTmp, U32_LEN((sizeof(IAP_Frame_t) + U8_LEN(ReLen))));
