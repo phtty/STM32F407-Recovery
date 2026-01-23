@@ -54,7 +54,7 @@ void Init_Config_Info(SysInfo_t *info)
     memcpy(&(info->net_cfg), &net_info, sizeof(NetConfig_t));
 
     // 计算config info的crc校验值
-    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(info) - sizeof(info->config_crc)) / 4);
+    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(SysInfo_t) - sizeof(info->config_crc)) / 4);
 
     // 擦除config info所在扇区并将数据写入
     EraseConfigInfo();
@@ -69,7 +69,7 @@ void Init_Config_Info(SysInfo_t *info)
 void Edit_Config_Info(SysInfo_t *info)
 {
     // 计算config info的crc校验值
-    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(info) - sizeof(info->config_crc)) / 4);
+    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(SysInfo_t) - sizeof(info->config_crc)) / 4);
 
     // 擦除config info所在扇区并将数据写入
     EraseConfigInfo();
