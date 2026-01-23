@@ -43,7 +43,7 @@ typedef enum {
     failed   = 2,
 } UpdateSta_t;
 
-bool Is_Config_Empty(SysInfo_t *info);
+bool Is_Config_Empty(volatile const SysInfo_t *info);
 void Init_Config_Info(SysInfo_t *info);
 void Edit_Config_Info(SysInfo_t *info);
 HAL_StatusTypeDef EraseConfigInfo(void);
