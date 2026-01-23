@@ -1,12 +1,14 @@
 #include "RingBuffer.h"
 
+RingBuffer ringbuf = {0};
+
 /**
  * @brief 检查缓冲区是否为空
  * @param fifo 指向环形缓冲区的指针
  * @retval 1 缓冲区为空
  * @retval 0 缓冲区非空
  */
-uint8_t BSP_RB_IsEmpty(RingBuffer *fifo)
+uint8_t BSP_RB_IsEmpty(const RingBuffer *fifo)
 {
     return fifo->read_index == fifo->write_index;
 }
@@ -17,7 +19,7 @@ uint8_t BSP_RB_IsEmpty(RingBuffer *fifo)
  * @retval 1 缓冲区已满
  * @retval 0 缓冲区未满
  */
-uint8_t BSP_RB_IsFull(RingBuffer *fifo)
+uint8_t BSP_RB_IsFull(const RingBuffer *fifo)
 {
     return ((fifo->write_index + 1) & (BUFFER_SIZE - 1)) == fifo->read_index;
 }
@@ -27,7 +29,7 @@ uint8_t BSP_RB_IsFull(RingBuffer *fifo)
  * @param fifo 指向环形缓冲区的指针
  * @return 当前可读取的字节数
  */
-uint16_t BSP_RB_GetAvailable(RingBuffer *fifo)
+uint16_t BSP_RB_GetAvailable(const RingBuffer *fifo)
 {
     return (fifo->write_index - fifo->read_index) & (BUFFER_SIZE - 1);
 }
@@ -37,7 +39,7 @@ uint16_t BSP_RB_GetAvailable(RingBuffer *fifo)
  * @param fifo 指向环形缓冲区的指针
  * @return 当前可写入的字节数
  */
-uint16_t BSP_RB_GetFreeSpace(RingBuffer *fifo)
+uint16_t BSP_RB_GetFreeSpace(const RingBuffer *fifo)
 {
     return BUFFER_SIZE - BSP_RB_GetAvailable(fifo) - 1;
 }
@@ -137,7 +139,7 @@ uint16_t BSP_RB_GetByte_Bulk(RingBuffer *fifo, uint8_t *data, uint16_t len)
  * @retval 1 读取成功
  * @retval 0 偏移超出有效范围
  */
-uint8_t BSP_RB_PeekByte(RingBuffer *fifo, uint16_t offset, uint8_t *byte)
+uint8_t BSP_RB_PeekByte(const RingBuffer *fifo, uint16_t offset, uint8_t *byte)
 {
     uint16_t avail = BSP_RB_GetAvailable(fifo);
 
@@ -157,7 +159,7 @@ uint8_t BSP_RB_PeekByte(RingBuffer *fifo, uint16_t offset, uint8_t *byte)
  * @param len 要读取的字节数
  * @return 实际读取的字节数
  */
-uint16_t BSP_RB_PeekBlock(RingBuffer *fifo, uint16_t offset, uint8_t *dest, uint16_t len)
+uint16_t BSP_RB_PeekBlock(const RingBuffer *fifo, uint16_t offset, uint8_t *dest, uint16_t len)
 {
     int16_t avail = BSP_RB_GetAvailable(fifo) - offset;
     if (avail <= 0)
@@ -186,7 +188,7 @@ uint16_t BSP_RB_PeekBlock(RingBuffer *fifo, uint16_t offset, uint8_t *dest, uint
  * @param offset 从当前读指针开始的偏移量
  * @return 从偏移位置开始的连续字节数
  */
-uint16_t BSP_RB_GetContiguousLength(RingBuffer *fifo, uint16_t offset)
+uint16_t BSP_RB_GetContiguousLength(const RingBuffer *fifo, uint16_t offset)
 {
     uint16_t avail = BSP_RB_GetAvailable(fifo);
 
