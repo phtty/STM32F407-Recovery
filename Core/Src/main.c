@@ -30,7 +30,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "config_info.h"
-
+#include "udp_conn.h"
+#include "protocol.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -107,13 +108,15 @@ int main(void)
     MX_USART6_UART_Init();
     /* USER CODE BEGIN 2 */
 
-    SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
+    if (!Is_Config_Integrity(pConfig)) { // 先检查config info是否完整
+        SysInfo_t cfg_info = {0};
+        Init_Config_Info(&cfg_info);
+    }
 
     HAL_TIM_Base_Start_IT(&htim2); // 250ms中断，用于闪灯
     HAL_TIM_Base_Start_IT(&htim3); // 1ms中断，用于处理网口数据
+    udp_conn_init();               // 初始化udp端口
 
-    if (!Is_Config_Empty(pConfig)) {
-    }
     /* USER CODE END 2 */
 
     /* Infinite loop */
@@ -122,6 +125,8 @@ int main(void)
         HAL_IWDG_Refresh(&hiwdg);
 
         MX_LWIP_Process();
+
+        handle_protocol();
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */

@@ -2,6 +2,9 @@
 #include "crc.h"
 #include "stm32f4xx_hal_flash_ex.h"
 #include <string.h>
+#include <stdbool.h>
+
+SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
 
 /**
  * @brief 判断配置区是否为全空(0xFF)
@@ -13,6 +16,20 @@ bool Is_Config_Empty(volatile const SysInfo_t *info)
         return true;
     }
     return false;
+}
+
+bool Is_Config_Integrity(volatile const SysInfo_t *info)
+{
+    uint32_t crc32 = 0;
+
+    if (info->magic != CONFIG_MAGIC)
+        return false;
+
+    crc32 = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(info) - sizeof(info->config_crc)) / 4);
+    if (info->config_crc != crc32)
+        return false;
+
+    return true;
 }
 
 /**
@@ -37,7 +54,7 @@ void Init_Config_Info(SysInfo_t *info)
     memcpy(&(info->net_cfg), &net_info, sizeof(NetConfig_t));
 
     // 计算config info的crc校验值
-    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, sizeof(info) - sizeof(info->config_crc));
+    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)(uint32_t *)info, sizeof(info) - sizeof(info->config_crc));
 
     // 擦除config info所在扇区并将数据写入
     EraseConfigInfo();
@@ -52,7 +69,7 @@ void Init_Config_Info(SysInfo_t *info)
 void Edit_Config_Info(SysInfo_t *info)
 {
     // 计算config info的crc校验值
-    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, sizeof(info) - sizeof(info->config_crc));
+    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(info) - sizeof(info->config_crc)) / 4);
 
     // 擦除config info所在扇区并将数据写入
     EraseConfigInfo();

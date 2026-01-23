@@ -38,6 +38,7 @@ virtualFolder:
           files:
             - path: LWIP/App/lwip.c
             - path: LWIP/Target/ethernetif.c
+            - path: LWIP/App/udp_conn.c
           folders: []
     - name: Drivers
       files: []

@@ -3,6 +3,27 @@
 
 #include "main.h"
 #include "RingBuffer.h"
+#include <stdbool.h>
+
+#define FRAME_MIN_LEN     (5U)
+#define FRAME_MAX_LEN     (5U + 1024U)
+
+#define FRAME_HEAD        (0x5A5A5A5AU)
+#define FRAME_HEAD_OFFSET (0U)
+#define FRAME_SEQ_OFFSET  (1U)
+#define FRAME_CMD_OFFSET  (2U)
+#define FRAME_LEN_OFFSET  (3U)
+
+typedef struct frame_struct {
+    uint32_t head;
+    uint32_t seq;
+    uint32_t cmd;
+    uint32_t len;
+    uint32_t data_crc[];
+} IAP_Frame_t;
+
+void handle_protocol(void);
+bool check_frame_validity(const RingBuffer *buff, uint32_t *data_len, uint8_t *cmd_num);
 
 __attribute__((packed)) typedef struct frame_struct {
     uint32_t head;       // 帧头
