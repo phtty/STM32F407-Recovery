@@ -45,6 +45,7 @@ typedef enum {
 
 bool Is_Config_Empty(SysInfo_t *info);
 void Init_Config_Info(SysInfo_t *info);
+void Edit_Config_Info(SysInfo_t *info);
 HAL_StatusTypeDef EraseConfigInfo(void);
 HAL_StatusTypeDef WriteConfigInfo(SysInfo_t *info);
 
