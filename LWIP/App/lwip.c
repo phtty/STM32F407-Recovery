@@ -37,7 +37,7 @@ static void Ethernet_Link_Periodic_Handle(struct netif *netif);
 void Error_Handler(void);
 
 /* USER CODE BEGIN 1 */
-
+extern uint8_t net_process;
 /* USER CODE END 1 */
 uint32_t EthernetLinkTimer;
 
@@ -141,6 +141,8 @@ static void Ethernet_Link_Periodic_Handle(struct netif *netif)
 void MX_LWIP_Process(void)
 {
     /* USER CODE BEGIN 4_1 */
+    if (!net_process)
+        return;
     /* USER CODE END 4_1 */
     ethernetif_input(&gnetif);
 

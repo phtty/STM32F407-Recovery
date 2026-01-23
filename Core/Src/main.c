@@ -19,14 +19,17 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "crc.h"
+#include "dma.h"
 #include "iwdg.h"
 #include "lwip.h"
 #include "rtc.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "config_info.h"
 
 /* USER CODE END Includes */
 
@@ -48,7 +51,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-extern uint8_t net_process;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,28 +95,33 @@ int main(void)
 
     /* Initialize all configured peripherals */
     MX_GPIO_Init();
+    MX_DMA_Init();
     MX_CRC_Init();
     MX_IWDG_Init();
     MX_RTC_Init();
     MX_TIM2_Init();
     MX_LWIP_Init();
     MX_TIM3_Init();
+    MX_USART1_UART_Init();
+    MX_USART3_UART_Init();
+    MX_USART6_UART_Init();
     /* USER CODE BEGIN 2 */
-    HAL_TIM_Base_Start_IT(&htim2);
-    HAL_TIM_Base_Start_IT(&htim3);
+
+    SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
+
+    HAL_TIM_Base_Start_IT(&htim2); // 250ms中断，用于闪灯
+    HAL_TIM_Base_Start_IT(&htim3); // 1ms中断，用于处理网口数据
+
+    if (!Is_Config_Empty(pConfig)) {
+    }
     /* USER CODE END 2 */
 
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
-    while (1) {
+    for (;;) {
         HAL_IWDG_Refresh(&hiwdg);
 
-        // process
-        if (net_process) {
-            net_process = 0;
-            MX_LWIP_Process();
-        }
-
+        MX_LWIP_Process();
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */

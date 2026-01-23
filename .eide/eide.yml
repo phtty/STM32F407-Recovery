@@ -20,6 +20,8 @@ virtualFolder:
             - path: Core/Src/stm32f4xx_hal_msp.c
             - path: Core/Src/system_stm32f4xx.c
             - path: Core/Src/tim.c
+            - path: Core/Src/dma.c
+            - path: Core/Src/usart.c
           folders: []
         - name: Compiler
           files:
@@ -62,6 +64,7 @@ virtualFolder:
             - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c
             - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
             - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
+            - path: Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
           folders: []
         - name: BSP
           files: []
@@ -77,6 +80,10 @@ virtualFolder:
             - name: RingBuff
               files:
                 - path: Drivers/BSP/RingBuffer/Ringbuffer.c
+              folders: []
+            - name: Config
+              files:
+                - path: Drivers/BSP/Config/config_info.c
               folders: []
     - name: Middlewares
       files: []
@@ -207,6 +214,7 @@ targets:
         - Middlewares/Third_Party/LwIP/system
         - Drivers/BSP/Protocol
         - Drivers/BSP/RingBuffer
+        - Drivers/BSP/Config
       libList: []
     excludeList: []
     toolchain: GCC
