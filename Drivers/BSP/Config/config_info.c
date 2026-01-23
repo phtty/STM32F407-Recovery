@@ -15,13 +15,20 @@ bool Is_Config_Empty(SysInfo_t *info)
     return false;
 }
 
+/**
+ * @brief 初始化config info并写入flash
+ *
+ * @param info config info结构体
+ */
 void Init_Config_Info(SysInfo_t *info)
 {
-    info->magic      = CONFIG_MAGIC;
-    info->update_sta = failed;
+    info->magic      = CONFIG_MAGIC; // 初始化魔数
+    info->update_sta = failed;       // 初始化升级状态机
 
-    memset(&(info->app_info), 0, sizeof(info->app_info));
+    memset(&(info->app_info), 0, sizeof(info->app_info)); // 初始化固件信息
+
     NetConfig_t net_info = {
+        // 初始化网络配置信息
         .ip   = {192, 168, 114, 200},
         .mask = {255, 255, 255, 0},
         .gw   = {192, 168, 114, 1},
@@ -29,17 +36,26 @@ void Init_Config_Info(SysInfo_t *info)
     };
     memcpy(&(info->net_cfg), &net_info, sizeof(NetConfig_t));
 
+    // 计算config info的crc校验值
+    info->config_crc = HAL_CRC_Calculate(&hcrc, info, sizeof(info) - sizeof(info->config_crc));
+
+    // 擦除config info所在扇区并将数据写入
     EraseConfigInfo();
     WriteConfigInfo(info);
 }
 
+/**
+ * @brief 擦除flash中的config info
+ *
+ * @return HAL_StatusTypeDef 操作结果
+ */
 HAL_StatusTypeDef EraseConfigInfo(void)
 {
     HAL_StatusTypeDef status               = HAL_ERROR;
     uint32_t SectorError                   = 0;
     FLASH_EraseInitTypeDef EraseInitStruct = {0};
 
-    HAL_FLASH_Unlock();
+    HAL_FLASH_Unlock(); // 解锁flash
     __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
 
     EraseInitStruct.TypeErase    = FLASH_TYPEERASE_SECTORS;
@@ -55,6 +71,12 @@ HAL_StatusTypeDef EraseConfigInfo(void)
     return status;
 }
 
+/**
+ * @brief 将config info写入flash
+ *
+ * @param info config info结构体
+ * @return HAL_StatusTypeDef 操作结果
+ */
 HAL_StatusTypeDef WriteConfigInfo(SysInfo_t *info)
 {
     HAL_StatusTypeDef status = HAL_ERROR;
@@ -62,6 +84,7 @@ HAL_StatusTypeDef WriteConfigInfo(SysInfo_t *info)
     HAL_FLASH_Unlock();
     __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
 
+    // 按word将config info写入flash
     for (uint32_t i = 0; i < sizeof(SysInfo_t) / 4; i++) {
         status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, ADDR_CONFIG_SECTOR + i, ((uint32_t *)info)[i]);
 
