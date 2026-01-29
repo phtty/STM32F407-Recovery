@@ -80,7 +80,7 @@ virtualFolder:
               folders: []
             - name: RingBuff
               files:
-                - path: Drivers/BSP/RingBuffer/Ringbuffer.c
+                - path: Drivers/BSP/RingBuff/Ringbuff.c
               folders: []
             - name: Config
               files:
@@ -214,7 +214,7 @@ targets:
         - Middlewares/Third_Party/LwIP/src/include
         - Middlewares/Third_Party/LwIP/system
         - Drivers/BSP/Protocol
-        - Drivers/BSP/RingBuffer
+        - Drivers/BSP/RingBuff
         - Drivers/BSP/Config
       libList: []
     excludeList: []

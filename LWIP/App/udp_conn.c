@@ -1,7 +1,7 @@
 #include "udp_conn.h"
 #include "lwip/err.h"
 #include "lwip/pbuf.h"
-#include "RingBuffer.h"
+#include "RingBuff.h"
 #include <string.h>
 #include <stdbool.h>
 
@@ -57,6 +57,7 @@ void udp_conn_init(void)
         return;
     }
 
+    // 开启广播支持
     ip_set_option(udp_pcb, SOF_BROADCAST);
 
     // 设置接收回调函数
