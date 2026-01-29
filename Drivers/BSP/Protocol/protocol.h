@@ -6,7 +6,7 @@
 #include <stdbool.h>
 
 #define FRAME_MIN_LEN     (5U)
-#define FRAME_MAX_LEN     (5U + 1024U)
+#define FRAME_MAX_LEN     (5U + 256U)
 
 #define FRAME_HEAD        (0x5A5A5A5AU)
 #define FRAME_HEAD_OFFSET (0U)

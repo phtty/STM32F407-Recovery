@@ -3,9 +3,9 @@
 #include "udp_conn.h"
 #include "config_info.h"
 
-uint8_t ptcl_buff[2048] = {0};
+uint8_t ptcl_buff[FRAME_MAX_LEN * 4] = {0};
 
-const uint8_t frame_len[] = {0, 4, 0, 1, 0, 0, 0};
+const uint8_t frame_len[] = {0, 0, 4, 0, 1, 0, 0, 0};
 
 void handle_protocol(void)
 {
@@ -13,7 +13,7 @@ void handle_protocol(void)
         return;
     udp_rx_flag = false;
 
-    while (BSP_RB_GetAvailable(&ringbuf) >= FRAME_MIN_LEN) {
+    while (BSP_RB_GetAvailable(&ringbuf) >= FRAME_MIN_LEN * 4) {
         uint32_t data_len = 0;
         uint8_t cmd_num   = 0;
 
@@ -32,11 +32,11 @@ void handle_protocol(void)
 
 bool check_frame_validity(const RingBuffer *buff, uint32_t *data_len, uint8_t *cmd_num)
 {
-    static uint8_t tmp_buff[FRAME_MAX_LEN] = {0};
+    static uint8_t tmp_buff[FRAME_MAX_LEN * 4] = {0};
 
     uint32_t temp_len = 0;
     BSP_RB_PeekBlock(buff, FRAME_LEN_OFFSET, (uint8_t *)(&temp_len), sizeof(temp_len));
-    BSP_RB_PeekBlock(buff, 0, tmp_buff, temp_len);
+    BSP_RB_PeekBlock(buff, 0, tmp_buff, temp_len + FRAME_MIN_LEN * 4);
 
     IAP_Frame_t *ptemp = (IAP_Frame_t *)(&tmp_buff);
 
@@ -59,7 +59,7 @@ bool check_frame_validity(const RingBuffer *buff, uint32_t *data_len, uint8_t *c
     if (crc != ptemp->data_crc[ptemp->len])
         return false;
 
-    *data_len = ptemp->len;
+    *data_len = ptemp->len + FRAME_MIN_LEN * 4;
     *cmd_num  = cmd;
 
     return true;
