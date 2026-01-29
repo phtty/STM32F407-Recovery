@@ -7,6 +7,8 @@
 #define U8_LEN(x)  ((x) * (sizeof(uint32_t)))
 #define U32_LEN(y) ((y) / (sizeof(uint32_t)))
 
+extern CRC_HandleTypeDef hcrc;
+
 /*
  * @brief  内部函数，构造返回数据包并发送
  * @param  ReSeq: 帧序号
@@ -24,10 +26,10 @@ static void cmd_SendReData(uint32_t ReSeq, uint32_t ReCmd, uint32_t ReLen, uint3
 
     if (ReLen != 0)
         memcpy(IAP_ReTmp.data_crc, ReData, U8_LEN(ReLen));
-    uint32_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)IAP_ReTmp, U32_LEN((sizeof(IAP_Frame_t) + U8_LEN(ReLen))));
+    uint32_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)&IAP_ReTmp, U32_LEN((sizeof(IAP_Frame_t) + U8_LEN(ReLen))));
     memcpy(IAP_ReTmp.data_crc + U8_LEN(ReLen), &crc, sizeof(uint32_t));
     // 广播
-    udp_send_data(&udp_pcb, boardcast, (uint8_t *)IAP_ReTmp, sizeof(IAP_Frame_t) + U8_LEN(ReLen) + sizeof(uint32_t));
+    udp_send_data(udp_pcb, boardcast, (uint8_t *)&IAP_ReTmp, sizeof(IAP_Frame_t) + U8_LEN(ReLen) + sizeof(uint32_t));
 }
 
 /*

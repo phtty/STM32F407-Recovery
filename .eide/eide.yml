@@ -33,6 +33,7 @@ virtualFolder:
             - path: Core/Src/stm32f4xx_it.c
             - path: Core/Src/syscalls.c
             - path: Core/Src/sysmem.c
+            - path: Drivers/BSP/Cmd/cmd.c
           folders: []
         - name: lwip
           files:
@@ -216,6 +217,7 @@ targets:
         - Drivers/BSP/Protocol
         - Drivers/BSP/RingBuffer
         - Drivers/BSP/Config
+        - Drivers/BSP/Cmd
       libList: []
     excludeList: []
     toolchain: GCC

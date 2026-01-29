@@ -7,6 +7,8 @@ uint8_t ptcl_buff[2048] = {0};
 
 const uint8_t frame_len[] = {0, 4, 0, 1, 0, 0, 0};
 
+extern void (*cmd_Functions[7])(IAP_Frame_t *IAP_Data);
+
 void handle_protocol(void)
 {
     if (!udp_rx_flag)
@@ -19,7 +21,7 @@ void handle_protocol(void)
 
         if (check_frame_validity(&ringbuf, &data_len, &cmd_num)) {
             BSP_RB_GetByte_Bulk(&ringbuf, ptcl_buff, data_len);
-            // cmd_function[cmd_num]((IAP_Frame_t *)ptcl_buff);
+            cmd_Functions[cmd_num]((IAP_Frame_t *)ptcl_buff);
 
         } else {
             BSP_RB_SkipBytes(&ringbuf, 1);

@@ -62,6 +62,21 @@ void Init_Config_Info(SysInfo_t *info)
 }
 
 /**
+ * @brief 修改config info并写入flash
+ *
+ * @param info config info结构体
+ */
+void Edit_Config_Info(SysInfo_t *info)
+{
+    // 计算config info的crc校验值
+    info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(SysInfo_t) - sizeof(info->config_crc)) / 4);
+
+    // 擦除config info所在扇区并将数据写入
+    EraseConfigInfo();
+    WriteConfigInfo(info);
+}
+
+/**
  * @brief 擦除flash中的config info
  *
  * @return HAL_StatusTypeDef 操作结果
