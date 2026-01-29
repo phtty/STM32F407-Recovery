@@ -23,7 +23,7 @@ void handle_protocol(void)
         uint8_t cmd_num   = 0;
 
         if (check_frame_validity(&ringbuf, &data_len, &cmd_num)) {
-            BSP_RB_GetByte_Bulk(&ringbuf, ptcl_buff, data_len + FRAME_MIN_LEN * 4);
+            BSP_RB_GetByte_Bulk(&ringbuf, ptcl_buff, (data_len + FRAME_MIN_LEN) * 4);
             // cmd_function[cmd_num]((IAP_Frame_t *)ptcl_buff);
 
         } else { // ½âÎöÊ§°Ü£¬Ìø¹ý1×Ö½Ú
