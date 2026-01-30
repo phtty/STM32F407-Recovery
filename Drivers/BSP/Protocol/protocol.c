@@ -2,6 +2,7 @@
 #include "crc.h"
 #include "udp_conn.h"
 #include "config_info.h"
+#include "cmd.h"
 
 uint8_t ptcl_buff[FRAME_MAX_LEN * 4] = {0};
 
@@ -24,7 +25,7 @@ void handle_protocol(void)
 
         if (check_frame_validity(&ringbuf, &data_len, &cmd_num)) {
             BSP_RB_GetByte_Bulk(&ringbuf, ptcl_buff, (data_len + FRAME_MIN_LEN) * 4);
-            // cmd_function[cmd_num]((IAP_Frame_t *)ptcl_buff);
+            cmd_Functions[cmd_num]((IAP_Frame_t *)ptcl_buff);
 
         } else { // 解析失败，跳过1字节
             BSP_RB_SkipBytes(&ringbuf, 1);
@@ -47,12 +48,12 @@ void handle_protocol(void)
  */
 bool check_frame_validity(const RingBuff_t *buff, uint32_t *data_len, uint8_t *cmd_num)
 {
-    static uint8_t tmp_buff[FRAME_MAX_LEN * 4] = {0};
+    static uint8_t tmp_buff[FRAME_MAX_LEN] = {0};
 
     // 验证帧合法性只能通过peek操作进行
     uint32_t temp_len = 0;
     BSP_RB_PeekBlock(buff, FRAME_LEN_OFFSET, (uint8_t *)(&temp_len), sizeof(temp_len));
-    BSP_RB_PeekBlock(buff, 0, tmp_buff, temp_len + FRAME_MIN_LEN * 4);
+    BSP_RB_PeekBlock(buff, 0, tmp_buff, temp_len);
 
     // 通过协议结构体去访问这个帧的所有内容
     IAP_Frame_t *ptemp = (IAP_Frame_t *)(&tmp_buff);
