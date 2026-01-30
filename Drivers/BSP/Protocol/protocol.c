@@ -2,12 +2,11 @@
 #include "crc.h"
 #include "udp_conn.h"
 #include "config_info.h"
+#include "cmd.h"
 
-uint8_t ptcl_buff[2048] = {0};
+uint8_t ptcl_buff[FRAME_MAX_LEN * 4] = {0};
 
-const uint8_t frame_len[] = {0, 4, 0, 1, 0, 0, 0};
-
-extern void (*cmd_Functions[7])(IAP_Frame_t *IAP_Data);
+const uint8_t frame_len[] = {0, 0, 4, 0, 1, 0, 0, 0};
 
 void handle_protocol(void)
 {
@@ -20,7 +19,7 @@ void handle_protocol(void)
         uint8_t cmd_num   = 0;
 
         if (check_frame_validity(&ringbuf, &data_len, &cmd_num)) {
-            BSP_RB_GetByte_Bulk(&ringbuf, ptcl_buff, data_len);
+            BSP_RB_GetByte_Bulk(&ringbuf, ptcl_buff, (data_len + FRAME_MIN_LEN) * 4);
             cmd_Functions[cmd_num]((IAP_Frame_t *)ptcl_buff);
 
         } else {
@@ -46,6 +45,7 @@ bool check_frame_validity(const RingBuffer *buff, uint32_t *data_len, uint8_t *c
         return false;
 
     SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
+
     if ((pConfig->update_sta != updating) && (ptemp->seq != 0))
         return false;
 

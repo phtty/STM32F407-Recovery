@@ -4,8 +4,8 @@
 #include "lwip.h"
 #include "config_info.h"
 
-#define U8_LEN(x)  ((x) * (sizeof(uint32_t)))
-#define U32_LEN(y) ((y) / (sizeof(uint32_t)))
+#define U8_LEN(x)  ((x) * sizeof(uint32_t))
+#define U32_LEN(y) ((y) / sizeof(uint32_t))
 
 extern CRC_HandleTypeDef hcrc;
 
@@ -18,18 +18,28 @@ extern CRC_HandleTypeDef hcrc;
  */
 static void cmd_SendReData(uint32_t ReSeq, uint32_t ReCmd, uint32_t ReLen, uint32_t *ReData)
 {
-    IAP_Frame_t IAP_ReTmp = {0};
-    IAP_ReTmp.head        = 0X5A5A5A5A;
-    IAP_ReTmp.seq         = ReSeq;
-    IAP_ReTmp.cmd         = ReCmd;
-    IAP_ReTmp.len         = ReLen;
+    uint8_t ReBuff[16 + 256 * 4 + 4] = {0};
+
+    IAP_Frame_t *pIAP_ReTmp = (IAP_Frame_t *)&(ReBuff);
+    pIAP_ReTmp->head        = 0X5A5A5A5A;
+    pIAP_ReTmp->seq         = ReSeq;
+    pIAP_ReTmp->cmd         = ReCmd;
+    pIAP_ReTmp->len         = ReLen;
 
     if (ReLen != 0)
-        memcpy(IAP_ReTmp.data_crc, ReData, U8_LEN(ReLen));
-    uint32_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)&IAP_ReTmp, U32_LEN((sizeof(IAP_Frame_t) + U8_LEN(ReLen))));
-    memcpy(IAP_ReTmp.data_crc + U8_LEN(ReLen), &crc, sizeof(uint32_t));
+        memcpy(pIAP_ReTmp->data_crc, ReData, U8_LEN(ReLen));
+    uint32_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)pIAP_ReTmp, U32_LEN((sizeof(IAP_Frame_t) + U8_LEN(ReLen))));
+    memcpy(&(pIAP_ReTmp->data_crc[ReLen]), &crc, sizeof(uint32_t));
     // 广播
-    udp_send_data(udp_pcb, boardcast, (uint8_t *)&IAP_ReTmp, sizeof(IAP_Frame_t) + U8_LEN(ReLen) + sizeof(uint32_t));
+    udp_send_data(udp_pcb, boardcast, (uint8_t *)pIAP_ReTmp, sizeof(IAP_Frame_t) + U8_LEN(ReLen) + sizeof(uint32_t));
+}
+
+/*
+ * @brief  测试
+ * @param  IAP_Data: IAP数据包
+ */
+void cmd_Test_00(IAP_Frame_t *IAP_Data)
+{
 }
 
 /*
@@ -148,7 +158,8 @@ void cmd_Restart_07(IAP_Frame_t *IAP_Data)
     NVIC_SystemReset();
 }
 
-void (*cmd_Functions[7])(IAP_Frame_t *IAP_Data) = {
+pfcmd_Functions cmd_Functions[] = {
+    cmd_Test_00,
     cmd_ReportIp_01,
     cmd_ForceModifyIP_02,
     cmd_ReportFirmwareStatus_03,
