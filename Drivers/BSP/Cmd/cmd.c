@@ -3,6 +3,8 @@
 #include "udp_conn.h"
 #include "lwip.h"
 #include "config_info.h"
+#include "flash.h"
+#include "BSP_rtc.h"
 
 #define U8_LEN(x)  ((x) * sizeof(uint32_t))
 #define U32_LEN(y) ((y) / sizeof(uint32_t))
@@ -127,6 +129,21 @@ void cmd_ReportFirmwareStatus_03(IAP_Frame_t *IAP_Data)
  */
 void cmd_PrepareUpgrade_04(IAP_Frame_t *IAP_Data)
 {
+    uint32_t FirmwareSize = 0;
+    memcpy(&FirmwareSize, IAP_Data->data_crc, sizeof(FirmwareSize));
+
+    uint32_t ReCmd = 0x0000b404;
+
+    uint32_t EraseSta = 0;
+    EraseSta          = Flash_Erase(ADDR_MAIN_APP, FirmwareSize);
+    if (EraseSta) {
+        SysInfo_t *pConfig    = (SysInfo_t *)ADDR_CONFIG_SECTOR;
+        SysInfo_t config_info = {0};
+        memcpy(&config_info, pConfig, sizeof(SysInfo_t));
+        config_info.app_info.size = FirmwareSize;
+        Edit_Config_Info(&config_info);
+    }
+    cmd_SendReData(IAP_Data->seq, ReCmd, U32_LEN(sizeof(uint32_t)), &EraseSta);
 }
 
 /*
@@ -135,6 +152,7 @@ void cmd_PrepareUpgrade_04(IAP_Frame_t *IAP_Data)
  */
 void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
 {
+    static uint32_t Max_Packet_Number = 0;
 }
 
 /*
@@ -143,6 +161,14 @@ void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
  */
 void cmd_EnterRecoveryMode_06(IAP_Frame_t *IAP_Data)
 {
+    uint32_t Rtc_Data = 0x0000DEAD;
+    RTC_Backup_Write(Rtc_Data);
+
+    uint32_t ReCmd = 0x0000b406;
+    cmd_SendReData(IAP_Data->seq, ReCmd, 0, NULL);
+
+    HAL_Delay(1000);
+    NVIC_SystemReset();
 }
 
 /*

@@ -34,6 +34,8 @@ virtualFolder:
             - path: Core/Src/syscalls.c
             - path: Core/Src/sysmem.c
             - path: Drivers/BSP/Cmd/cmd.c
+            - path: Drivers/BSP/Flash/flash.c
+            - path: Drivers/BSP/Rtc/BSP_rtc.c
           folders: []
         - name: lwip
           files:
@@ -218,8 +220,11 @@ targets:
         - Drivers/BSP/RingBuffer
         - Drivers/BSP/Config
         - Drivers/BSP/Cmd
+        - Drivers/BSP/Flash
+        - Drivers/BSP/Rtc
       libList: []
-    excludeList: []
+    excludeList:
+      - <virtual_root>/Application/User/rtc.c
     toolchain: GCC
     toolchainConfigMap:
       GCC:
