@@ -1,11 +1,8 @@
 #include "BSP_rtc.h"
 #include "stm32f4xx_hal.h"
 
-// RTC 备份寄存器地址
-#define RTC_BKP0R   RTC->BKP0R  // 使用 BKP0R
-
 /**
-  * @brief  将数据写入 RTC 备份域寄存器
+  * @brief  将数据写入 RTC 备份域寄存器0
   * @param  data: 要写入的数据
   * @retval 返回值 1：成功，0：失败
   */
