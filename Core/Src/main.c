@@ -32,6 +32,7 @@
 #include "config_info.h"
 #include "udp_conn.h"
 #include "protocol.h"
+#include "SEGGER_RTT.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -108,7 +109,7 @@ int main(void)
     MX_USART6_UART_Init();
     /* USER CODE BEGIN 2 */
 
-    SysInfo_t *pConfig    = (SysInfo_t *)ADDR_CONFIG_SECTOR;
+    SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
 
     if (!Is_Config_Empty(pConfig)) { // 先检查config info是否完整
         SysInfo_t cfg_info = {0};
@@ -118,6 +119,7 @@ int main(void)
     HAL_TIM_Base_Start_IT(&htim2); // 250ms中断，用于闪灯
     HAL_TIM_Base_Start_IT(&htim3); // 1ms中断，用于处理网口数据
     udp_conn_init();               // 初始化udp端口
+    SEGGER_RTT_Init();
 
     /* USER CODE END 2 */
 

@@ -33,9 +33,6 @@ virtualFolder:
             - path: Core/Src/stm32f4xx_it.c
             - path: Core/Src/syscalls.c
             - path: Core/Src/sysmem.c
-            - path: Drivers/BSP/Cmd/cmd.c
-            - path: Drivers/BSP/Flash/flash.c
-            - path: Drivers/BSP/Rtc/BSP_rtc.c
           folders: []
         - name: lwip
           files:
@@ -89,6 +86,16 @@ virtualFolder:
               files:
                 - path: Drivers/BSP/Config/config_info.c
               folders: []
+            - name: CMD
+              files:
+                - path: Drivers/BSP/Cmd/cmd.c
+              folders: []
+        - name: RTT
+          files:
+            - path: Drivers/RTT/RTT/SEGGER_RTT.c
+            - path: Drivers/RTT/RTT/SEGGER_RTT_printf.c
+            - path: Drivers/RTT/RTT/SEGGER_RTT_Syscalls_GCC.c
+          folders: []
     - name: Middlewares
       files: []
       folders:
@@ -220,11 +227,10 @@ targets:
         - Drivers/BSP/RingBuff
         - Drivers/BSP/Config
         - Drivers/BSP/Cmd
-        - Drivers/BSP/Flash
-        - Drivers/BSP/Rtc
+        - Drivers/RTT/Config
+        - Drivers/RTT/RTT
       libList: []
-    excludeList:
-      - <virtual_root>/Application/User/rtc.c
+    excludeList: []
     toolchain: GCC
     toolchainConfigMap:
       GCC:

@@ -48,12 +48,13 @@ void handle_protocol(void)
  */
 bool check_frame_validity(const RingBuff_t *buff, uint32_t *data_len, uint8_t *cmd_num)
 {
-    static uint8_t tmp_buff[FRAME_MAX_LEN] = {0};
+    static uint32_t tmp_buff[FRAME_MAX_LEN] = {0};
+    SysInfo_t *pConfig                      = (SysInfo_t *)ADDR_CONFIG_SECTOR;
 
     // 验证帧合法性只能通过peek操作进行
     uint32_t temp_len = 0;
-    BSP_RB_PeekBlock(buff, FRAME_LEN_OFFSET, (uint8_t *)(&temp_len), sizeof(temp_len));
-    BSP_RB_PeekBlock(buff, 0, tmp_buff, temp_len);
+    BSP_RB_PeekBlock(buff, FRAME_LEN_OFFSET * 4, (uint8_t *)(&temp_len), sizeof(temp_len));
+    BSP_RB_PeekBlock(buff, 0, (uint8_t *)tmp_buff, (temp_len + 5) * 4);
 
     // 通过协议结构体去访问这个帧的所有内容
     IAP_Frame_t *ptemp = (IAP_Frame_t *)(&tmp_buff);
@@ -71,6 +72,8 @@ bool check_frame_validity(const RingBuff_t *buff, uint32_t *data_len, uint8_t *c
         return false;
     if ((cmd < 0x01) || (cmd > 0x07))
         return false;
+
+    // 检查数据部分长度
     if ((ptemp->len != frame_len[cmd]) && (cmd != 0x05))
         return false;
 
