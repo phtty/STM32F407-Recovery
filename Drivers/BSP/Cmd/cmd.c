@@ -7,8 +7,8 @@
 #include "crc.h"
 #include "iwdg.h"
 
-#define U8_LEN(x)  ((x) * sizeof(uint32_t))
-#define U32_LEN(y) ((y) / sizeof(uint32_t))
+#define U8_LEN(x)  ((x) * (sizeof(uint32_t)))
+#define U32_LEN(y) ((y) / (sizeof(uint32_t)))
 
 static void cmd_Test_00(IAP_Frame_t *IAP_Data);
 static void cmd_ReportIp_01(IAP_Frame_t *IAP_Data);
