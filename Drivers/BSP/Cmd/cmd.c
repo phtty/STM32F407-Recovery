@@ -6,8 +6,8 @@
 #include "flash.h"
 #include "BSP_rtc.h"
 
-#define U8_LEN(x)  ((x) * sizeof(uint32_t))
-#define U32_LEN(y) ((y) / sizeof(uint32_t))
+#define U8_LEN(x)  ((x) * (sizeof(uint32_t)))
+#define U32_LEN(y) ((y) / (sizeof(uint32_t)))
 
 extern CRC_HandleTypeDef hcrc;
 
@@ -152,7 +152,7 @@ void cmd_PrepareUpgrade_04(IAP_Frame_t *IAP_Data)
  */
 void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
 {
-    static uint32_t Max_Packet_Number = 0;
+    static uint32_t Packet_Number = 0;
 }
 
 /*

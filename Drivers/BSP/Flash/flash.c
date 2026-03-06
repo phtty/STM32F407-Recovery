@@ -39,7 +39,7 @@ uint32_t Flash_Erase(uint32_t eraseAddr, uint32_t eraseSize)
     eraseInitStruct.TypeErase    = FLASH_TYPEERASE_SECTORS;
     eraseInitStruct.Sector       = startSector;
     eraseInitStruct.NbSectors    = endSector - startSector + 1;
-    eraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3; // 根据实际情况调整电压范围
+    eraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;
 
     uint32_t sectorError = 0;
 
