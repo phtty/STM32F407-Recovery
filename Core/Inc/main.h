@@ -47,6 +47,11 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
+// SRAM区地址位带映射
+#define BITBAND_SRAM(address, bit) (*(volatile uint32_t *)(0x22000000 + ((uint32_t)(address) - 0x20000000) * 0x20 + (bit) * 0x04))
+// 外设区地址位带映射
+#define BITBAND_PERIPH(address, bit) (*(volatile uint32_t *)(0x42000000 + ((uint32_t)(address) - 0x40000000) * 0x20 + (bit) * 0x04))
+
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

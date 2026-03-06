@@ -2,7 +2,7 @@
 #define DRIVERS_BSP_PROTOCOL_PROTOCOL_H
 
 #include "main.h"
-#include "RingBuffer.h"
+#include "RingBuff.h"
 #include <stdbool.h>
 
 #define FRAME_MIN_LEN     (5U)
@@ -23,6 +23,6 @@ typedef struct frame_struct {
 } IAP_Frame_t;
 
 void handle_protocol(void);
-bool check_frame_validity(const RingBuffer *buff, uint32_t *data_len, uint8_t *cmd_num);
+bool check_frame_validity(const RingBuff_t *buff, uint32_t *data_len, uint8_t *cmd_num);
 
 #endif // !DRIVERS_BSP_PROTOCOL_PROTOCOL_H
