@@ -23,6 +23,11 @@ typedef enum {
     rtn_cmd07 = (uint32_t)0x0000b407U,
 } rtn_cmd_t;
 
+extern bool timeout_flag;
+extern uint8_t timeout_cnt;
+extern uint8_t bitmap[BITMAP_SIZE];
+extern uint16_t frame_cnt;
+
 typedef void (*pfcmd_Functions)(IAP_Frame_t *);
 extern const pfcmd_Functions cmd_Functions[];
 

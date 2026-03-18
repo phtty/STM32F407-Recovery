@@ -192,6 +192,10 @@ static void cmd_PrepareUpgrade_04(IAP_Frame_t *IAP_Data)
     cmd_SendReData(IAP_Data->seq, rtn_cmd04, U32_LEN(sizeof(uint32_t)), &erase_sta);
 }
 
+bool timeout_flag           = false;
+uint8_t timeout_cnt         = 0;
+uint8_t bitmap[BITMAP_SIZE] = {0};
+uint16_t frame_cnt          = 0;
 /**
  * @brief  发送升级包
  *
@@ -199,10 +203,8 @@ static void cmd_PrepareUpgrade_04(IAP_Frame_t *IAP_Data)
  */
 static void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
 {
-    static uint8_t bitmap[BITMAP_SIZE] = {0};
-    static uint16_t frame_cnt          = 0;
-    uint16_t frame_seq                 = IAP_Data->seq - 1;
-    const SysInfo_t *pConfig           = (SysInfo_t *)ADDR_CONFIG_SECTOR;
+    uint16_t frame_seq       = IAP_Data->seq - 1;
+    const SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
     if (pConfig->app_info.size == 0) // config_info中的app信息大小不能为0
         return;
 
@@ -216,10 +218,13 @@ static void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
     // 写入完成，在bitmap中标记
     BITBAND_SRAM(&bitmap[frame_seq / 8], frame_seq % 8) = 1;
     frame_cnt++;
+    timeout_flag = true; // 开启超时计时
+    timeout_cnt  = 0;
 
     if (frame_cnt <= max_len - 1)
         return; // 不是最后一帧，则不需要回复重传内容
-    frame_cnt = 0;
+    frame_cnt    = 0;
+    timeout_flag = false; // 接收到最后一帧，关闭超时计时
 
     // 遍历bitmap以统计所有缺失的帧
     uint32_t miss_frame[FIRMWARE_MAX_FRAME_NUM] = {0};
