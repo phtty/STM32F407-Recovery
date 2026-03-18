@@ -199,9 +199,10 @@ static void cmd_PrepareUpgrade_04(IAP_Frame_t *IAP_Data)
  */
 static void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
 {
-    static uint8_t bitmap[BITMAP_SIZE] = {0}, frame_cnt = 0;
-    uint16_t frame_seq       = IAP_Data->seq - 1;
-    const SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
+    static uint8_t bitmap[BITMAP_SIZE] = {0};
+    static uint16_t frame_cnt          = 0;
+    uint16_t frame_seq                 = IAP_Data->seq - 1;
+    const SysInfo_t *pConfig           = (SysInfo_t *)ADDR_CONFIG_SECTOR;
     if (pConfig->app_info.size == 0) // config_info中的app信息大小不能为0
         return;
 

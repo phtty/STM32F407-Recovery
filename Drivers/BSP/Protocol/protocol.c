@@ -18,22 +18,23 @@ void handle_protocol(void)
         return;
     udp_rx_flag = false;
 
-    // 解析缓冲区的数据直到缓冲区有效内容长度小于最短有效帧长度
-    while (BSP_RB_GetAvailable(&ringbuf) >= FRAME_MIN_LEN * 4) {
-        uint32_t data_len = 0;
-        uint8_t cmd_num   = 0;
+    // 解析缓冲区的数据直到缓冲区有效内容长度小于1字节
+    while (BSP_RB_GetAvailable(&ringbuf) >= 4) {
+        uint32_t frame_len = 0;
+        uint8_t cmd_num    = 0;
 
-        if (check_frame_validity(&ringbuf, &data_len, &cmd_num)) {
-            BSP_RB_GetByte_Bulk(&ringbuf, ptcl_buff, (data_len + FRAME_MIN_LEN) * 4);
+        IAP_FrameSta_t status = check_frame_validity(&ringbuf, &frame_len, &cmd_num);
+
+        if (status == iap_frame_rdy) {
+            BSP_RB_GetByte_Bulk(&ringbuf, ptcl_buff, frame_len);
             cmd_Functions[cmd_num]((IAP_Frame_t *)ptcl_buff);
 
-        } else { // 解析失败，跳过1字节
+        } else if (status == iap_frame_wait) { // 数据包不完整
+            break;
+
+        } else { // 确认为脏数据或伪造包，滑动1字节继续查找
             BSP_RB_SkipBytes(&ringbuf, 1);
         }
-
-        // 若缓冲区已满，则清空缓冲区
-        if (BSP_RB_IsFull(&ringbuf))
-            BSP_RB_FreeBuff(&ringbuf);
     }
 }
 
@@ -41,50 +42,65 @@ void handle_protocol(void)
  * @brief 检查帧格式
  *
  * @param buff 环形缓冲区指针
- * @param data_len 识别到的数据部分长度
+ * @param total_len 帧长度
  * @param cmd_num 识别到的指令码内容
  * @return true 合法帧
  * @return false 非法帧
  */
-bool check_frame_validity(const RingBuff_t *buff, uint32_t *data_len, uint8_t *cmd_num)
+IAP_FrameSta_t check_frame_validity(const RingBuff_t *buff, uint32_t *total_len, uint8_t *cmd_num)
 {
-    static uint32_t tmp_buff[FRAME_MAX_LEN] = {0};
-    SysInfo_t *pConfig                      = (SysInfo_t *)ADDR_CONFIG_SECTOR;
+    uint32_t available = BSP_RB_GetAvailable(buff);
 
-    // 验证帧合法性只能通过peek操作进行
-    uint32_t temp_len = 0;
-    BSP_RB_PeekBlock(buff, FRAME_LEN_OFFSET * 4, (uint8_t *)(&temp_len), sizeof(temp_len));
-    BSP_RB_PeekBlock(buff, 0, (uint8_t *)tmp_buff, (temp_len + 5) * 4);
+    // 基础长度检查
+    if (available < 4)
+        return iap_frame_wait;
 
-    // 通过协议结构体去访问这个帧的所有内容
-    IAP_Frame_t *ptemp = (IAP_Frame_t *)(&tmp_buff);
+    // 帧头检查
+    uint32_t head = 0;
+    BSP_RB_PeekBlock(buff, 0, (uint8_t *)&head, 4);
+    if (head != FRAME_HEAD)
+        return iap_frame_fake; // 开头就不是5A，直接标记为fake触发跳过
 
-    if (ptemp->head != FRAME_HEAD) // 检查帧头
-        return false;
+    // 长度合法性初步检查 (防止恶意大包或伪造包)
+    uint32_t payload_len = 0;
+    if (available >= (FRAME_LEN_OFFSET + 1) * 4) {
+        BSP_RB_PeekBlock(buff, FRAME_LEN_OFFSET * 4, (uint8_t *)&payload_len, 4);
 
-    if ((pConfig->update_sta != updating) && (ptemp->seq != 0)) // 检查序列号
-        return false;
+        if (payload_len > 256)
+            return iap_frame_fake; // 协议规定最大256，超过范围则为伪造帧头
 
-    // 检查命令码
-    uint8_t cmd     = ptemp->cmd & 0xff;
-    uint8_t cmd_dir = (ptemp->cmd >> 8) & 0xff;
-    if (cmd_dir != 0x4B)
-        return false;
-    if ((cmd < 0x01) || (cmd > 0x07))
-        return false;
+    } else {
+        return iap_frame_wait; // 连长度字段都还没收到
+    }
 
-    // 检查数据部分长度
-    if ((ptemp->len != frame_len[cmd]) && (cmd != 0x05))
-        return false;
+    uint32_t full_bytes = (payload_len + FRAME_MIN_LEN) * 4;
 
-    // 检查CRC校验码
+    // 数据完整性检查
+    if (available < full_bytes) {
+        // --- 关键点：在等待期间，扫描剩余数据里是否有新的帧头 ---
+        // 如果在当前半截包的范围内发现了新帧头，说明当前这个头是“伪造”或者“残缺”的
+        for (uint32_t i = 1; i <= available - 4; i++) {
+            uint32_t next_head = 0;
+            BSP_RB_PeekBlock(buff, i, (uint8_t *)&next_head, 4);
+
+            if (next_head == FRAME_HEAD)
+                return iap_frame_fake;
+        }
+        return iap_frame_wait;
+    }
+
+    // CRC最终验证
+    static uint32_t tmp_buff[FRAME_MAX_LEN];
+    BSP_RB_PeekBlock(buff, 0, (uint8_t *)tmp_buff, full_bytes);
+    IAP_Frame_t *ptemp = (IAP_Frame_t *)tmp_buff;
+
     uint32_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)ptemp, ptemp->len + 4);
-    if (crc != ptemp->data_crc[ptemp->len])
-        return false;
+    if (crc != ptemp->data_crc[ptemp->len]) {
+        return iap_frame_fake; // 长度够了但校验不过，判定为伪造或损坏
+    }
 
-    // 合法帧，返回解析到的数据部分长度和命令码
-    *data_len = ptemp->len + FRAME_MIN_LEN * 4;
-    *cmd_num  = cmd;
-
-    return true;
+    // 验证通过
+    *total_len = full_bytes;
+    *cmd_num   = ptemp->cmd & 0xFF;
+    return iap_frame_rdy;
 }
