@@ -228,6 +228,8 @@ targets:
         - Drivers/RTT/RTT
       libList: []
     excludeList: []
+    settings:
+      debugger: cortex-debug
     toolchain: GCC
     toolchainConfigMap:
       GCC:
@@ -314,6 +316,8 @@ targets:
         - Drivers/RTT/RTT
       libList: []
     excludeList: []
+    settings:
+      debugger: cortex-debug
     toolchain: GCC
     toolchainConfigMap:
       GCC:
@@ -376,4 +380,4 @@ targets:
         protocol: swd
         speed: 8000
         target: STM32F407ZG
-    uploader: probe-rs
+    uploader: OpenOCD
