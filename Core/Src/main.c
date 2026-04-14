@@ -111,7 +111,7 @@ int main(void)
 
     SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
 
-    if (!Is_Config_Empty(pConfig)) { // 先检查config info是否完整
+    if (Is_Config_Empty(pConfig)) { // 先检查config info是否完整
         SysInfo_t cfg_info = {0};
         Init_Config_Info(&cfg_info);
     }
