@@ -12,7 +12,7 @@ SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
 bool Is_Config_Empty(volatile const SysInfo_t *info)
 {
     // 检查魔数和一部分关键内容是否为0xFF
-    if (info->magic == 0xFFFFFFFF && info->config_crc == 0xFFFFFFFF) {
+    if ((info->magic == 0xFFFFFFFF && info->config_crc == 0xFFFFFFFF) || (info->app_info.crc32 == 0xFFFFFFFF) || (info->magic != CONFIG_MAGIC)) {
         return true;
     }
     return false;
