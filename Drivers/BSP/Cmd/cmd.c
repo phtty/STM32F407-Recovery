@@ -141,7 +141,15 @@ static void cmd_ReportFirmwareStatus_03(IAP_Frame_t *IAP_Data)
     uint32_t ReData[11] = {0};
     ReData[0]           = config_info.app_info.size;                                        // 固件大小
     ReData[1]           = config_info.app_info.crc32;                                       // 固件CRC32
-    memcpy(ReData + 2, config_info.app_info.version, sizeof(config_info.app_info.version)); // 固件版本信息
+    /* 版本为 ASCII 字符串：按上位机 word 显示约定（大端字节序）逐 word 构造，
+       与 0x01 的 IP 构造同构；不能 memcpy（否则上位机按 4 字节一组反转显示） */
+    const char *ver = config_info.app_info.version;
+    for (uint32_t i = 0; i < sizeof(config_info.app_info.version) / sizeof(uint32_t); i++) {
+        ReData[2 + i] = (uint32_t)(uint8_t)ver[4 * i] << 24 |
+                        (uint32_t)(uint8_t)ver[4 * i + 1] << 16 |
+                        (uint32_t)(uint8_t)ver[4 * i + 2] << 8 |
+                        (uint32_t)(uint8_t)ver[4 * i + 3];
+    }
     ReData[10] = config_info.update_sta;
 
     cmd_SendReData(IAP_Data->seq, rtn_cmd03, U32_LEN(sizeof(ReData)), ReData);

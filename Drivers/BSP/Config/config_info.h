@@ -5,14 +5,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// µØÖ·Óë³£Á¿¶¨Òå
+// åœ°å€ä¸å¸¸é‡å®šä¹‰
 #define ADDR_CONFIG_SECTOR 0x08004000
 #define ADDR_RECOVERY_APP  0x08008000
 #define ADDR_MAIN_APP      0x08040000
 
 #define CONFIG_MAGIC       0x0d000721
 
-// ÍøÂçÅäÖÃ
+// ç½‘ç»œé…ç½®
 __attribute__((aligned(4))) typedef struct {
     uint8_t ip[4];
     uint8_t mask[4];
@@ -20,23 +20,23 @@ __attribute__((aligned(4))) typedef struct {
     uint32_t port;
 } NetConfig_t;
 
-// main appĞÅÏ¢
+// main appä¿¡æ¯
 __attribute__((aligned(4))) typedef struct {
-    uint32_t size;  // Main AppµÄ×Ö½Ú³¤¶È
-    uint32_t crc32; // Main AppµÄCRC32Öµ
+    uint32_t size;  // Main Appçš„å­—èŠ‚é•¿åº¦
+    uint32_t crc32; // Main Appçš„CRC32å€¼
     char version[32];
 } FWInfo_t;
 
-// Ó¦¸Ã¶¨ÒåÔÚ0x08004000
+// åº”è¯¥å®šä¹‰åœ¨0x08004000
 __attribute__((aligned(4))) typedef struct {
-    uint32_t magic;      // Ä§Êı£¬ÅĞ¶ÏÅäÖÃÇøÊÇ·ñÓĞĞ§
-    uint32_t update_sta; // Éı¼¶×´Ì¬»ú
-    FWInfo_t app_info;   // main_app×´Ì¬
-    NetConfig_t net_cfg; // ÍøÂçÅäÖÃ
-    uint32_t config_crc; // ±¾½á¹¹Ìå×ÔÉíµÄĞ£Ñé
+    uint32_t magic;      // é­”æ•°ï¼Œåˆ¤æ–­é…ç½®åŒºæ˜¯å¦æœ‰æ•ˆ
+    uint32_t update_sta; // å‡çº§çŠ¶æ€æœº
+    FWInfo_t app_info;   // main_appçŠ¶æ€
+    NetConfig_t net_cfg; // ç½‘ç»œé…ç½®
+    uint32_t config_crc; // æœ¬ç»“æ„ä½“è‡ªèº«çš„æ ¡éªŒ
 } SysInfo_t;
 
-// Éı¼¶×´Ì¬»ú
+// å‡çº§çŠ¶æ€æœº
 typedef enum {
     updated  = 0,
     updating = 1,
@@ -44,6 +44,7 @@ typedef enum {
 } UpdateSta_t;
 
 bool Is_Config_Empty(volatile const SysInfo_t *info);
+bool Is_Config_Integrity(volatile const SysInfo_t *info);
 void Init_Config_Info(SysInfo_t *info);
 void Edit_Config_Info(SysInfo_t *info);
 HAL_StatusTypeDef EraseConfigInfo(void);
