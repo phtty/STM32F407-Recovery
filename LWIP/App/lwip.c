@@ -28,6 +28,7 @@
 #include "ethernetif.h"
 
 /* USER CODE BEGIN 0 */
+#include "config_info.h"
 
 /* USER CODE END 0 */
 /* Private function prototypes -----------------------------------------------*/
@@ -74,6 +75,25 @@ void MX_LWIP_Init(void)
     GATEWAY_ADDRESS[3] = 1;
 
     /* USER CODE BEGIN IP_ADDRESSES */
+    /* 板级网络配置（Sector1）优先：有效记录（magic + CRC 校验通过）用 net_cfg 配置 netif，
+     * 空/无效回退上方出厂默认常量（与主固件/Bootloader 出厂默认统一）。
+     * 时序：MX_LWIP_Init 早于 main 中 config 判空/初始化代码，故在此自行直读 Sector1；
+     * Is_Config_Integrity 仅用 HAL CRC，无 RTOS 依赖，可于 main 早期调用。 */
+    const SysInfo_t *p_cfg = (const SysInfo_t *)ADDR_CONFIG_SECTOR;
+    if (Is_Config_Integrity(p_cfg)) {
+        IP_ADDRESS[0]      = p_cfg->net_cfg.ip[0];
+        IP_ADDRESS[1]      = p_cfg->net_cfg.ip[1];
+        IP_ADDRESS[2]      = p_cfg->net_cfg.ip[2];
+        IP_ADDRESS[3]      = p_cfg->net_cfg.ip[3];
+        NETMASK_ADDRESS[0] = p_cfg->net_cfg.mask[0];
+        NETMASK_ADDRESS[1] = p_cfg->net_cfg.mask[1];
+        NETMASK_ADDRESS[2] = p_cfg->net_cfg.mask[2];
+        NETMASK_ADDRESS[3] = p_cfg->net_cfg.mask[3];
+        GATEWAY_ADDRESS[0] = p_cfg->net_cfg.gw[0];
+        GATEWAY_ADDRESS[1] = p_cfg->net_cfg.gw[1];
+        GATEWAY_ADDRESS[2] = p_cfg->net_cfg.gw[2];
+        GATEWAY_ADDRESS[3] = p_cfg->net_cfg.gw[3];
+    }
     /* USER CODE END IP_ADDRESSES */
 
     /* Initialize the LwIP stack without RTOS */
