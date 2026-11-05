@@ -75,7 +75,11 @@ bool rs485_send_frame(uint32_t cmd, uint32_t seq, const uint32_t *data, uint16_t
 
     _dir_tx(true);
     HAL_StatusTypeDef st = HAL_UART_Transmit(&huart1, (uint8_t *)s_tx, (uint16_t)bytes, 200U);
-    while (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_TC) == RESET) {
+
+    /* 等最后一字节真正移出再释放总线；给个上界，UART 异常时不能死等 */
+    uint32_t t0 = HAL_GetTick();
+    while (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_TC) == RESET &&
+           (HAL_GetTick() - t0) < 20U) {
     }
     _dir_tx(false);
 
