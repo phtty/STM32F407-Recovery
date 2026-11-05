@@ -10,6 +10,7 @@
 struct udp_pcb *udp_pcb;
 bool udp_rx_flag     = false;
 uint16_t remote_port = UDP_DEFAULT_PORT;
+ip_addr_t remote_ip;
 
 /**
  * @brief UDP接收回调函数
@@ -27,7 +28,9 @@ static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p,
         uint8_t *recv_data = (uint8_t *)p->payload;
         uint16_t recv_len  = p->len;
 
-        udp_connect(pcb, addr, port);
+        /* Do NOT udp_connect(): it locks the PCB to the first peer port. Just remember
+           the sender and reply with udp_sendto(), so a restarted host tool still works. */
+        ip_addr_copy(remote_ip, *addr);
         remote_port = port;
         udp_rx_flag = true;
 
@@ -86,7 +89,7 @@ void udp_send_data(struct udp_pcb *pcb, udp_sendmode_t mode, uint8_t *data, uint
 
     // 发送数据
     if (mode == unicast) { // 单播发送
-        udp_send(pcb, p);
+        udp_sendto(pcb, p, &remote_ip, remote_port);
 
     } else if (mode == boardcast) { // 广播发送
         udp_sendto(pcb, p, IP_ADDR_BROADCAST, remote_port);
