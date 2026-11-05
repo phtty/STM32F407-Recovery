@@ -117,13 +117,10 @@ IAP_FrameSta_t check_frame_validity(const RingBuff_t *buff, uint32_t *total_len,
 
     // 数据完整性检查
     if (available < full_bytes) {
-        // 等待期间扫描剩余数据里是否有新的帧头：有则当前这个是残包/伪头
-        for (uint32_t i = 1; i + 4U <= available; i++) {
-            uint32_t next_head = 0;
-            BSP_RB_PeekBlock(buff, i, (uint8_t *)&next_head, 4);
-            if (next_head == FRAME_HEAD)
-                return iap_frame_fake;
-        }
+        // 只等，不在这里扫描“下一帧头”。合法半帧里也可能出现 0x5A5A5A5A：
+        // 帧头后紧跟 seq，块号 90(0x5A) 的前 5 个字节就是 5A 5A 5A 5A 5A，
+        // 偏移 1 处仍会被误判成新帧头，旧逻辑随即 skip 1，把这一帧永久丢掉。
+        // 残包/伪头交给后面的 CRC 校验：长度够了校验不过再 skip 1 重扫即可。
         return iap_frame_wait;
     }
 

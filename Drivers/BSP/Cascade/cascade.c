@@ -30,6 +30,10 @@
 #define SYNC_BLOCK_BYTES (1024U)
 #define FLASH_SECTOR_SIZE (0x20000U)
 
+/* 0x13 从卡要先把 update_sta 落盘再回 ACK，内部会擦写 16KB config 扇区，
+   实测远超普通 100ms 事务超时；这里单独放宽，避免“从卡已校验成功、主卡却判失败”。 */
+#define VERIFY_TIMEOUT_MS (3000U)
+
 static cascade_status_t s_slave;
 static uint32_t s_next_query_tick;
 
@@ -203,7 +207,7 @@ static sync_event_t _run_verify(void)
     uint32_t req[2] = {s_sync_size, s_sync_crc};
     IAP_Frame_t *r  = (IAP_Frame_t *)s_reply_buff;
 
-    s_last_acked = rs485_transact(CMD_VERIFY, 0, req, 2, r, RS485_TIMEOUT_MS, RS485_RETRIES);
+    s_last_acked = rs485_transact(CMD_VERIFY, 0, req, 2, r, VERIFY_TIMEOUT_MS, 1U);
     if (s_last_acked && r->len == 2U && r->data_crc[0] == 0U && r->data_crc[1] == s_sync_crc) {
         s_slave.online     = true;
         s_slave.update_sta = 0;
