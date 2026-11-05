@@ -50,10 +50,8 @@ static uint32_t s_reply_buff[FRAME_MAX_LEN];
 
 static void _set_slave_unknown(void)
 {
-    s_slave.online     = false;
-    s_slave.mode       = 2;
-    s_slave.size       = 0;
-    s_slave.crc32      = 0;
+    /* 只把升级状态标成 unknown：从卡刚才是否在线仍然是有效信息，
+       0x04 之后紧接着的 0x03 不该突然报“从卡离线” */
     s_slave.update_sta = 3;
     s_slave.tick       = HAL_GetTick();
 }
@@ -134,10 +132,10 @@ static void _query_status(void)
     s_slave.tick   = HAL_GetTick();
 }
 
-static void _sync_fail(void)
+static void _sync_fail(bool acked)
 {
     s_sync_failed      = true;
-    s_slave.online     = true; /* 有应答，只是失败 */
+    s_slave.online     = acked;
     s_slave.update_sta = 2;
     s_sync_state       = sync_idle;
     s_next_query_tick  = HAL_GetTick();
@@ -152,9 +150,9 @@ static void _sync_step(void)
         uint32_t req[2] = {s_sync_size, s_sync_crc};
         /* 0x11 里从卡要擦 main app 区：单扇区最长 2s，最多 6 个扇区，
            用 15s 专用超时且不重试（重试会重复擦除）。 */
-        if (!rs485_transact(CMD_PREPARE, 0, req, 2, r, 15000U, 0U) ||
-            r->len != 1U || r->data_crc[0] != 0U) {
-            _sync_fail();
+        bool acked = rs485_transact(CMD_PREPARE, 0, req, 2, r, 15000U, 0U);
+        if (!acked || r->len != 1U || r->data_crc[0] != 0U) {
+            _sync_fail(acked);
             break;
         }
         s_slave.update_sta = 1;
@@ -170,11 +168,11 @@ static void _sync_step(void)
         uint32_t words  = (remain >= SYNC_BLOCK_BYTES ? SYNC_BLOCK_BYTES : remain) / 4U;
         const uint32_t *data = (const uint32_t *)(ADDR_MAIN_APP + offset);
 
-        if (!rs485_transact(CMD_WRITE_BLOCK, s_sync_block, data, (uint16_t)words, r,
-                            RS485_TIMEOUT_MS, RS485_RETRIES) ||
-            r->len != 1U || r->data_crc[0] != 0U) {
+        bool acked = rs485_transact(CMD_WRITE_BLOCK, s_sync_block, data, (uint16_t)words, r,
+                                    RS485_TIMEOUT_MS, RS485_RETRIES);
+        if (!acked || r->len != 1U || r->data_crc[0] != 0U) {
             if (++s_block_retry >= 3U) {
-                _sync_fail();
+                _sync_fail(acked);
             }
             break;
         }
@@ -189,9 +187,9 @@ static void _sync_step(void)
 
     case sync_verify: {
         uint32_t req[2] = {s_sync_size, s_sync_crc};
-        if (!rs485_transact(CMD_VERIFY, 0, req, 2, r, RS485_TIMEOUT_MS, RS485_RETRIES) ||
-            r->len != 2U || r->data_crc[0] != 0U || r->data_crc[1] != s_sync_crc) {
-            _sync_fail();
+        bool acked = rs485_transact(CMD_VERIFY, 0, req, 2, r, RS485_TIMEOUT_MS, RS485_RETRIES);
+        if (!acked || r->len != 2U || r->data_crc[0] != 0U || r->data_crc[1] != s_sync_crc) {
+            _sync_fail(acked);
             break;
         }
         s_slave.online     = true;
