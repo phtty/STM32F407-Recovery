@@ -30,6 +30,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "config_info.h"
+#include "rs485.h"
+#include "cascade.h"
 #include "udp_conn.h"
 #include "protocol.h"
 #include "SEGGER_RTT.h"
@@ -107,6 +109,8 @@ int main(void)
     MX_USART1_UART_Init();
     MX_USART3_UART_Init();
     MX_USART6_UART_Init();
+    rs485_init(); // internal 485: USART1 + RE(PA8)
+    cascade_init();
     /* USER CODE BEGIN 2 */
 
     SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
@@ -131,6 +135,7 @@ int main(void)
         MX_LWIP_Process();
 
         handle_protocol();
+        cascade_poll();
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */

@@ -87,6 +87,14 @@ virtualFolder:
               files:
                 - path: Drivers/BSP/Config/config_info.c
               folders: []
+            - name: Rs485
+              files:
+                - path: Drivers/BSP/Rs485/rs485.c
+              folders: []
+            - name: Cascade
+              files:
+                - path: Drivers/BSP/Cascade/cascade.c
+              folders: []
         - name: RTT
           files:
             - path: Drivers/RTT/RTT/SEGGER_RTT.c
@@ -224,6 +232,8 @@ targets:
         - Drivers/BSP/RingBuff
         - Drivers/BSP/Config
         - Drivers/BSP/Cmd
+        - Drivers/BSP/Rs485
+        - Drivers/BSP/Cascade
         - Drivers/RTT/Config
         - Drivers/RTT/RTT
       libList: []
@@ -312,6 +322,8 @@ targets:
         - Drivers/BSP/RingBuff
         - Drivers/BSP/Config
         - Drivers/BSP/Cmd
+        - Drivers/BSP/Rs485
+        - Drivers/BSP/Cascade
         - Drivers/RTT/Config
         - Drivers/RTT/RTT
       libList: []

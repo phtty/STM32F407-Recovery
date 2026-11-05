@@ -3,104 +3,142 @@
 #include "udp_conn.h"
 #include "config_info.h"
 #include "cmd.h"
+#include "cascade.h"
+#include "rs485.h"
 
 uint8_t ptcl_buff[FRAME_MAX_LEN * 4] = {0};
 
-const uint8_t frame_len[] = {0, 0, 4, 0, 1, 0, 0, 0};
-
-/**
- * @brief ½«»º³åÇøÖĞµÄÊı¾İ½øĞĞĞ­Òé½âÎö
- *
- */
-void handle_protocol(void)
+IAP_CmdDir_t iap_cmd_dir(uint32_t cmd)
 {
-    if (!udp_rx_flag)
-        return;
-    udp_rx_flag = false;
+    if ((cmd & 0xFFFF0000U) != 0U)
+        return iap_dir_none;
 
-    // ½âÎö»º³åÇøµÄÊı¾İÖ±µ½»º³åÇøÓĞĞ§ÄÚÈİ³¤¶ÈĞ¡ÓÚ1×Ö½Ú
-    while (BSP_RB_GetAvailable(&ringbuf) >= 4) {
-        uint32_t frame_len = 0;
-        uint8_t cmd_num    = 0;
+    uint32_t dir = (cmd >> 8) & 0xFFU;
+    if (dir == FRAME_DIR_HOST)
+        return iap_dir_host;
+    if (dir == FRAME_DIR_TO_SLAVE)
+        return iap_dir_to_slave;
+    if (dir == FRAME_DIR_FROM_SLAVE)
+        return iap_dir_from_slave;
+    return iap_dir_none;
+}
 
-        IAP_FrameSta_t status = check_frame_validity(&ringbuf, &frame_len, &cmd_num);
+/** @brief ä¸Šä½æœºå‘½ä»¤ï¼šæŒ‰ä½å­—èŠ‚æŸ¥å‘½ä»¤è¡¨ï¼Œè¶Šç•Œç›´æ¥ä¸¢ */
+static void _dispatch_host(IAP_Frame_t *f)
+{
+    uint32_t id = f->cmd & 0xFFU;
+    if (id < CMD_HOST_COUNT && cmd_Functions[id] != NULL)
+        cmd_Functions[id](f);
+}
 
-        if (status == iap_frame_rdy) {
-            BSP_RB_GetByte_Bulk(&ringbuf, ptcl_buff, frame_len);
-            cmd_Functions[cmd_num]((IAP_Frame_t *)ptcl_buff);
+/** @brief ä»ä¸€å¸§çš„ç¯å½¢ç¼“å†²é‡Œè¿ç»­å–å¸§å¹¶åˆ†å‘ */
+static void _drain(const RingBuff_t *rb, bool from_udp)
+{
+    while (BSP_RB_GetAvailable(rb) >= 4U) {
+        uint32_t full_len = 0;
+        uint32_t cmd      = 0;
 
-        } else if (status == iap_frame_wait) { // Êı¾İ°ü²»ÍêÕû
+        IAP_FrameSta_t st = check_frame_validity(rb, &full_len, &cmd);
+        if (st == iap_frame_wait)
             break;
+        if (st != iap_frame_rdy) {
+            BSP_RB_SkipBytes((RingBuff_t *)rb, 1);
+            continue;
+        }
 
-        } else { // È·ÈÏÎªÔàÊı¾İ»òÎ±Ôì°ü£¬»¬¶¯1×Ö½Ú¼ÌĞø²éÕÒ
-            BSP_RB_SkipBytes(&ringbuf, 1);
+        BSP_RB_GetByte_Bulk((RingBuff_t *)rb, ptcl_buff, full_len);
+        IAP_Frame_t *f  = (IAP_Frame_t *)ptcl_buff;
+        IAP_CmdDir_t dir = iap_cmd_dir(f->cmd);
+
+        if (from_udp) {
+            /* ç½‘å£åªæ¥å—ä¸Šä½æœºå‘½ä»¤ï¼›å†…éƒ¨å‘½ä»¤æ··è¿›æ¥ä¸€å¾‹å¿½ç•¥ */
+            if (dir == iap_dir_host)
+                _dispatch_host(f);
+        } else {
+            /* 485 åªæ¥å—å†…éƒ¨å‘½ä»¤ï¼šä¸»å¡æ”¶åº”ç­”ï¼Œä»å¡æ”¶è¯·æ±‚ */
+            if (dir == iap_dir_to_slave)
+                cascade_handle_request(f);
+            else if (dir == iap_dir_from_slave)
+                cascade_handle_reply(f);
         }
     }
 }
 
 /**
- * @brief ¼ì²éÖ¡¸ñÊ½
+ * @brief å°†ç¼“å†²åŒºä¸­çš„æ•°æ®è¿›è¡Œåè®®è§£æ
  *
- * @param buff »·ĞÎ»º³åÇøÖ¸Õë
- * @param total_len Ö¡³¤¶È
- * @param cmd_num Ê¶±ğµ½µÄÖ¸ÁîÂëÄÚÈİ
- * @return true ºÏ·¨Ö¡
- * @return false ·Ç·¨Ö¡
+ * ç½‘å£å’Œå†…éƒ¨ 485 å„æœ‰ä¸€ä¸ªç¯å½¢ç¼“å†²ï¼›ä¸¤è€…äº’ä¸é˜»å¡ï¼š
+ * 485 äº‹åŠ¡åœ¨ cascade_poll() é‡Œä¸»åŠ¨å‘èµ·ï¼Œè¿™é‡Œåªè´Ÿè´£æŠŠå·²åˆ°è¾¾çš„å¸§åˆ†å‘æ‰ã€‚
  */
-IAP_FrameSta_t check_frame_validity(const RingBuff_t *buff, uint32_t *total_len, uint8_t *cmd_num)
+void handle_protocol(void)
+{
+    if (udp_rx_flag) {
+        udp_rx_flag = false;
+        _drain(&ringbuf, true);
+    }
+
+    _drain(rs485_rx_ring(), false);
+}
+
+/**
+ * @brief æ£€æŸ¥å¸§æ ¼å¼
+ *
+ * @param buff ç¯å½¢ç¼“å†²åŒºæŒ‡é’ˆ
+ * @param total_len å¸§é•¿åº¦ï¼ˆå­—èŠ‚ï¼‰
+ * @param cmd å®Œæ•´å‘½ä»¤ç ï¼ˆå«æ–¹å‘å­—èŠ‚ï¼‰
+ * @return IAP_FrameSta_t å¸§çŠ¶æ€
+ */
+IAP_FrameSta_t check_frame_validity(const RingBuff_t *buff, uint32_t *total_len, uint32_t *cmd)
 {
     uint32_t available = BSP_RB_GetAvailable(buff);
 
-    // »ù´¡³¤¶È¼ì²é
-    if (available < 4)
+    // åŸºç¡€é•¿åº¦æ£€æŸ¥
+    if (available < 4U)
         return iap_frame_wait;
 
-    // Ö¡Í·¼ì²é
+    // å¸§å¤´æ£€æŸ¥
     uint32_t head = 0;
     BSP_RB_PeekBlock(buff, 0, (uint8_t *)&head, 4);
     if (head != FRAME_HEAD)
-        return iap_frame_fake; // ¿ªÍ·¾Í²»ÊÇ5A£¬Ö±½Ó±ê¼ÇÎªfake´¥·¢Ìø¹ı
+        return iap_frame_fake; // å¼€å¤´å°±ä¸æ˜¯ 5Aï¼Œç›´æ¥æ ‡è®°ä¸º fake è§¦å‘è·³è¿‡
 
-    // ³¤¶ÈºÏ·¨ĞÔ³õ²½¼ì²é (·ÀÖ¹¶ñÒâ´ó°ü»òÎ±Ôì°ü)
+    // é•¿åº¦åˆæ³•æ€§åˆæ­¥æ£€æŸ¥ï¼ˆé˜²æ­¢æ¶æ„å¤§åŒ…æˆ–ä¼ªé€ åŒ…ï¼‰
     uint32_t payload_len = 0;
-    if (available >= (FRAME_LEN_OFFSET + 1) * 4) {
-        BSP_RB_PeekBlock(buff, FRAME_LEN_OFFSET * 4, (uint8_t *)&payload_len, 4);
+    if (available >= (FRAME_LEN_OFFSET + 1U) * 4U) {
+        BSP_RB_PeekBlock(buff, FRAME_LEN_OFFSET * 4U, (uint8_t *)&payload_len, 4);
 
-        if (payload_len > 256)
-            return iap_frame_fake; // Ğ­Òé¹æ¶¨×î´ó256£¬³¬¹ı·¶Î§ÔòÎªÎ±ÔìÖ¡Í·
-
+        if (payload_len > 256U)
+            return iap_frame_fake; // åè®®è§„å®šæœ€å¤§ 256ï¼Œè¶…è¿‡èŒƒå›´åˆ™ä¸ºä¼ªé€ å¸§å¤´
     } else {
-        return iap_frame_wait; // Á¬³¤¶È×Ö¶Î¶¼»¹Ã»ÊÕµ½
+        return iap_frame_wait; // è¿é•¿åº¦å­—æ®µéƒ½è¿˜æ²¡æ”¶åˆ°
     }
 
-    uint32_t full_bytes = (payload_len + FRAME_MIN_LEN) * 4;
+    uint32_t full_bytes = (payload_len + FRAME_MIN_LEN) * 4U;
 
-    // Êı¾İÍêÕûĞÔ¼ì²é
+    // æ•°æ®å®Œæ•´æ€§æ£€æŸ¥
     if (available < full_bytes) {
-        // --- ¹Ø¼üµã£ºÔÚµÈ´ıÆÚ¼ä£¬É¨ÃèÊ£ÓàÊı¾İÀïÊÇ·ñÓĞĞÂµÄÖ¡Í· ---
-        // Èç¹ûÔÚµ±Ç°°ë½Ø°üµÄ·¶Î§ÄÚ·¢ÏÖÁËĞÂÖ¡Í·£¬ËµÃ÷µ±Ç°Õâ¸öÍ·ÊÇ¡°Î±Ôì¡±»òÕß¡°²ĞÈ±¡±µÄ
-        for (uint32_t i = 1; i <= available - 4; i++) {
+        // ç­‰å¾…æœŸé—´æ‰«æå‰©ä½™æ•°æ®é‡Œæ˜¯å¦æœ‰æ–°çš„å¸§å¤´ï¼šæœ‰åˆ™å½“å‰è¿™ä¸ªæ˜¯æ®‹åŒ…/ä¼ªå¤´
+        for (uint32_t i = 1; i + 4U <= available; i++) {
             uint32_t next_head = 0;
             BSP_RB_PeekBlock(buff, i, (uint8_t *)&next_head, 4);
-
             if (next_head == FRAME_HEAD)
                 return iap_frame_fake;
         }
         return iap_frame_wait;
     }
 
-    // CRC×îÖÕÑéÖ¤
+    // CRC æœ€ç»ˆéªŒè¯
     static uint32_t tmp_buff[FRAME_MAX_LEN];
     BSP_RB_PeekBlock(buff, 0, (uint8_t *)tmp_buff, full_bytes);
     IAP_Frame_t *ptemp = (IAP_Frame_t *)tmp_buff;
 
-    uint32_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)ptemp, ptemp->len + 4);
-    if (crc != ptemp->data_crc[ptemp->len]) {
-        return iap_frame_fake; // ³¤¶È¹»ÁËµ«Ğ£Ñé²»¹ı£¬ÅĞ¶¨ÎªÎ±Ôì»òËğ»µ
-    }
+    uint32_t crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)ptemp, ptemp->len + 4U);
+    if (crc != ptemp->data_crc[ptemp->len])
+        return iap_frame_fake; // é•¿åº¦å¤Ÿäº†ä½†æ ¡éªŒä¸è¿‡ï¼Œåˆ¤å®šä¸ºä¼ªé€ æˆ–æŸå
 
-    // ÑéÖ¤Í¨¹ı
+    // éªŒè¯é€šè¿‡
     *total_len = full_bytes;
-    *cmd_num   = ptemp->cmd & 0xFF;
+    if (cmd != NULL)
+        *cmd = ptemp->cmd;
     return iap_frame_rdy;
 }

@@ -26,6 +26,8 @@
 #include "lwip.h"
 #include "cmd.h"
 #include "config_info.h"
+#include "usart.h"
+#include "rs485.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -277,27 +279,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     if (&htim2 == htim) {
         HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 
-        if (timeout_flag) { // ÅÐ¶ÏÊÇ·ñ³¬Ê±
-            timeout_flag = false;
-
-            timeout_cnt++;
-            if (timeout_cnt >= 4) {
-                memset(bitmap, 0, sizeof(bitmap));
-                frame_cnt   = 0;
-                timeout_cnt = 0;
-
-                // ÐÞ¸ÄÉý¼¶×´Ì¬»ú
-                const SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
-                SysInfo_t config_info    = {0};
-                memcpy(&config_info, pConfig, sizeof(SysInfo_t));
-
-                config_info.update_sta = failed;
-                Edit_Config_Info(&config_info);
-            }
-        }
 
     } else if (&htim3 == htim) {
         net_process = 1;
     }
 }
 /* USER CODE END 1 */
+
+/* ---- USART1: internal 485 RX (P1) ---- */
+void USART1_IRQHandler(void)
+{
+    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET) {
+        uint8_t byte = (uint8_t)(huart1.Instance->DR & 0xFFU);
+        rs485_on_rx_byte(byte);
+    }
+    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_ORE) != RESET) {
+        __HAL_UART_CLEAR_OREFLAG(&huart1);
+    }
+}
+

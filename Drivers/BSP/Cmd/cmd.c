@@ -6,9 +6,15 @@
 #include "rtc.h"
 #include "crc.h"
 #include "iwdg.h"
+#include "cascade.h"
 
 #define U8_LEN(x)  ((x) * sizeof(uint32_t))
 #define U32_LEN(y) ((y) / sizeof(uint32_t))
+
+#define FW_BLOCK_WORDS (256U)
+#define FW_BLOCK_BYTES (1024U)
+#define FW_MAX_SIZE    (768U * 1024U)
+#define FW_MAX_FRAMES  (FW_MAX_SIZE / FW_BLOCK_BYTES)
 
 static void cmd_Test_00(IAP_Frame_t *IAP_Data);
 static void cmd_ReportIp_01(IAP_Frame_t *IAP_Data);
@@ -18,7 +24,13 @@ static void cmd_PrepareUpgrade_04(IAP_Frame_t *IAP_Data);
 static void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data);
 static void cmd_EnterRecoveryMode_06(IAP_Frame_t *IAP_Data);
 static void cmd_Restart_07(IAP_Frame_t *IAP_Data);
-static HAL_StatusTypeDef write_fw(uint32_t addr_offset, uint32_t *data, uint16_t word_len);
+static void cmd_Reserved_08(IAP_Frame_t *IAP_Data);
+static void cmd_Reserved_09(IAP_Frame_t *IAP_Data);
+static void cmd_Reserved_0A(IAP_Frame_t *IAP_Data);
+static void cmd_Reserved_0B(IAP_Frame_t *IAP_Data);
+static void cmd_TrigTestKey_0C(IAP_Frame_t *IAP_Data);
+
+static HAL_StatusTypeDef write_fw(uint32_t addr_offset, const uint32_t *data, uint16_t word_len);
 
 const pfcmd_Functions cmd_Functions[] = {
     cmd_Test_00,
@@ -29,31 +41,39 @@ const pfcmd_Functions cmd_Functions[] = {
     cmd_SendUpgradePackage_05,
     cmd_EnterRecoveryMode_06,
     cmd_Restart_07,
+    cmd_Reserved_08,
+    cmd_Reserved_09,
+    cmd_Reserved_0A,
+    cmd_Reserved_0B,
+    cmd_TrigTestKey_0C,
 };
 
+/* ---- æ”¶åŒ…ä¼šè¯ ---- */
+static uint32_t s_fw_size;       /* æœ¬æ¬¡å›ºä»¶å­—èŠ‚æ•° */
+static uint32_t s_fw_crc_exp;    /* ä¸»æœºç»™çš„æ•´åŒ… CRC32 */
+static uint32_t s_total_frames;  /* æ€»åŒ…æ•° */
+static uint8_t s_bitmap[FW_MAX_FRAMES / 8U];
+static bool s_receiving;
+static uint32_t s_last_missing[256];
+static uint32_t s_last_missing_cnt;
+
 /**
- * @brief  ÄÚ²¿º¯Êı£¬¹¹Ôì·µ»ØÊı¾İ°ü²¢·¢ËÍ
- *
- * @param  ReSeq: Ö¡ĞòºÅ
- * @param  ReCmd: ·µ»ØÃüÁî
- * @param  ReLen: Êı¾İ³¤¶È(µ¥Î»: uint32_t)
- * @param  ReData: Êı¾İ
+ * @brief æ„é€ åº”ç­”å¸§å¹¶å‘é€ï¼ˆä¸Šä½æœºæ–¹å‘ï¼‰
  */
-static void cmd_SendReData(uint32_t ReSeq, uint32_t ReCmd, uint32_t ReLen, uint32_t *ReData)
+static void cmd_SendReData(uint32_t ReSeq, uint32_t ReCmd, uint32_t ReLen, const uint32_t *ReData)
 {
-    uint32_t ReBuff[FRAME_MAX_LEN] = {0};
+    static uint32_t ReBuff[FRAME_MAX_LEN];
 
     IAP_Frame_t *pIAP_ReTmp = (IAP_Frame_t *)&(ReBuff);
-    pIAP_ReTmp->head        = 0x5A5A5A5A;
+    pIAP_ReTmp->head        = FRAME_HEAD;
     pIAP_ReTmp->seq         = ReSeq;
     pIAP_ReTmp->cmd         = ReCmd;
     pIAP_ReTmp->len         = ReLen;
 
-    if (ReLen != 0) // Êı¾İÔØºÉ
+    if (ReLen != 0U && ReData != NULL)
         memcpy(pIAP_ReTmp->data_crc, ReData, U8_LEN(ReLen));
 
-    // crcĞ£ÑéÖµ
-    pIAP_ReTmp->data_crc[ReLen] = HAL_CRC_Calculate(&hcrc, (uint32_t *)pIAP_ReTmp, U32_LEN((sizeof(IAP_Frame_t) + U8_LEN(ReLen))));
+    pIAP_ReTmp->data_crc[ReLen] = HAL_CRC_Calculate(&hcrc, (uint32_t *)pIAP_ReTmp, 4U + ReLen);
 
     if (ReCmd == rtn_cmd01 || ReCmd == rtn_cmd02)
         udp_send_data(udp_pcb, boardcast, (uint8_t *)pIAP_ReTmp, sizeof(IAP_Frame_t) + U8_LEN(ReLen) + sizeof(uint32_t));
@@ -61,243 +81,340 @@ static void cmd_SendReData(uint32_t ReSeq, uint32_t ReCmd, uint32_t ReLen, uint3
         udp_send_data(udp_pcb, unicast, (uint8_t *)pIAP_ReTmp, sizeof(IAP_Frame_t) + U8_LEN(ReLen) + sizeof(uint32_t));
 }
 
-/**
- * @brief  ²âÊÔ
- *
- * @param  IAP_Data: IAPÊı¾İ°ü
- */
-static void cmd_Test_00(IAP_Frame_t *IAP_Data)
+static void _read_config(SysInfo_t *cfg)
 {
+    memcpy(cfg, (const void *)ADDR_CONFIG_SECTOR, sizeof(SysInfo_t));
+}
+
+static bool _bit_get(uint32_t idx)
+{
+    if (idx >= FW_MAX_FRAMES)
+        return false;
+    return (s_bitmap[idx / 8U] & (uint8_t)(1U << (idx % 8U))) != 0U;
+}
+
+static void _bit_set(uint32_t idx)
+{
+    if (idx < FW_MAX_FRAMES)
+        s_bitmap[idx / 8U] |= (uint8_t)(1U << (idx % 8U));
 }
 
 /**
- * @brief  ±¨¸æIPµØÖ·
- *
- * @param  IAP_Data: IAPÊı¾İ°ü
+ * @brief æŸ¥è¯¢æ¨¡å¼/èƒ½åŠ›ï¼ˆ0x00ï¼‰
+ */
+static void cmd_Test_00(IAP_Frame_t *IAP_Data)
+{
+    if (IAP_Data->len < 1U)
+        return;
+    if (IAP_Data->data_crc[0] != CONFIG_MAGIC)
+        return;
+
+    uint32_t ReData[4] = {CONFIG_MAGIC, 1U /* Recovery */, IAP_CAPS, IAP_HW_ID};
+    cmd_SendReData(IAP_Data->seq, rtn_cmd00, U32_LEN(sizeof(ReData)), ReData);
+}
+
+/**
+ * @brief æŠ¥å‘Š IP åœ°å€ï¼ˆ0x01ï¼‰
  */
 static void cmd_ReportIp_01(IAP_Frame_t *IAP_Data)
 {
-    SysInfo_t *pConfig    = (SysInfo_t *)ADDR_CONFIG_SECTOR;
     SysInfo_t config_info = {0};
-    memcpy(&config_info, pConfig, sizeof(SysInfo_t));
+    _read_config(&config_info);
 
     uint32_t ReData[4] = {0};
-    ReData[0]          = config_info.net_cfg.ip[0] << 24 | config_info.net_cfg.ip[1] << 16 | config_info.net_cfg.ip[2] << 8 | config_info.net_cfg.ip[3];
-    ReData[1]          = config_info.net_cfg.mask[0] << 24 | config_info.net_cfg.mask[1] << 16 | config_info.net_cfg.mask[2] << 8 | config_info.net_cfg.mask[3];
-    ReData[2]          = config_info.net_cfg.gw[0] << 24 | config_info.net_cfg.gw[1] << 16 | config_info.net_cfg.gw[2] << 8 | config_info.net_cfg.gw[3];
+    ReData[0]          = (uint32_t)config_info.net_cfg.ip[0] << 24 | (uint32_t)config_info.net_cfg.ip[1] << 16 |
+                         (uint32_t)config_info.net_cfg.ip[2] << 8 | config_info.net_cfg.ip[3];
+    ReData[1]          = (uint32_t)config_info.net_cfg.mask[0] << 24 | (uint32_t)config_info.net_cfg.mask[1] << 16 |
+                         (uint32_t)config_info.net_cfg.mask[2] << 8 | config_info.net_cfg.mask[3];
+    ReData[2]          = (uint32_t)config_info.net_cfg.gw[0] << 24 | (uint32_t)config_info.net_cfg.gw[1] << 16 |
+                         (uint32_t)config_info.net_cfg.gw[2] << 8 | config_info.net_cfg.gw[3];
     ReData[3]          = config_info.net_cfg.port;
 
     cmd_SendReData(IAP_Data->seq, rtn_cmd01, U32_LEN(sizeof(ReData)), ReData);
 }
 
 /**
- * @brief  Ç¿ÖÆĞŞ¸ÄIPµØÖ·
- *
- * @param  IAP_Data: IAPÊı¾İ°ü
+ * @brief å¼ºåˆ¶ä¿®æ”¹ IP åœ°å€ï¼ˆ0x02ï¼‰
  */
 static void cmd_ForceModifyIP_02(IAP_Frame_t *IAP_Data)
 {
-    SysInfo_t *pConfig    = (SysInfo_t *)ADDR_CONFIG_SECTOR;
+    if (IAP_Data->len < 4U)
+        return;
+
     SysInfo_t config_info = {0};
-    memcpy(&config_info, pConfig, sizeof(SysInfo_t));
+    _read_config(&config_info);
 
-    uint32_t TmpData[4] = {0};
-    memcpy(TmpData, IAP_Data->data_crc, sizeof(TmpData));
+    config_info.net_cfg.ip[0]   = (uint8_t)(IAP_Data->data_crc[0] >> 24);
+    config_info.net_cfg.ip[1]   = (uint8_t)(IAP_Data->data_crc[0] >> 16);
+    config_info.net_cfg.ip[2]   = (uint8_t)(IAP_Data->data_crc[0] >> 8);
+    config_info.net_cfg.ip[3]   = (uint8_t)(IAP_Data->data_crc[0]);
+    config_info.net_cfg.mask[0] = (uint8_t)(IAP_Data->data_crc[1] >> 24);
+    config_info.net_cfg.mask[1] = (uint8_t)(IAP_Data->data_crc[1] >> 16);
+    config_info.net_cfg.mask[2] = (uint8_t)(IAP_Data->data_crc[1] >> 8);
+    config_info.net_cfg.mask[3] = (uint8_t)(IAP_Data->data_crc[1]);
+    config_info.net_cfg.gw[0]   = (uint8_t)(IAP_Data->data_crc[2] >> 24);
+    config_info.net_cfg.gw[1]   = (uint8_t)(IAP_Data->data_crc[2] >> 16);
+    config_info.net_cfg.gw[2]   = (uint8_t)(IAP_Data->data_crc[2] >> 8);
+    config_info.net_cfg.gw[3]   = (uint8_t)(IAP_Data->data_crc[2]);
+    config_info.net_cfg.port    = IAP_Data->data_crc[3];
 
-    NetConfig_t net_info = {0};
-    net_info.ip[0]       = (uint8_t)(TmpData[0] >> 24);
-    net_info.ip[1]       = (uint8_t)(TmpData[0] >> 16);
-    net_info.ip[2]       = (uint8_t)(TmpData[0] >> 8);
-    net_info.ip[3]       = (uint8_t)(TmpData[0]);
-    net_info.mask[0]     = (uint8_t)(TmpData[1] >> 24);
-    net_info.mask[1]     = (uint8_t)(TmpData[1] >> 16);
-    net_info.mask[2]     = (uint8_t)(TmpData[1] >> 8);
-    net_info.mask[3]     = (uint8_t)(TmpData[1]);
-    net_info.gw[0]       = (uint8_t)(TmpData[2] >> 24);
-    net_info.gw[1]       = (uint8_t)(TmpData[2] >> 16);
-    net_info.gw[2]       = (uint8_t)(TmpData[2] >> 8);
-    net_info.gw[3]       = (uint8_t)(TmpData[2]);
-    net_info.port        = TmpData[3];
-
-    config_info.net_cfg = net_info;
-
-    // Ğ´ÈëÅäÖÃĞÅÏ¢
     Edit_Config_Info(&config_info);
 
     cmd_SendReData(IAP_Data->seq, rtn_cmd02, 0, NULL);
 }
 
 /**
- * @brief ±¨¸æ¹Ì¼ş×´Ì¬
- *
- * @param IAP_Data IAPÊı¾İ°ü
+ * @brief æŸ¥è¯¢ä¸»å¡+ä»å¡çŠ¶æ€ï¼ˆ0x03ï¼‰
  */
 static void cmd_ReportFirmwareStatus_03(IAP_Frame_t *IAP_Data)
 {
-    SysInfo_t *pConfig    = (SysInfo_t *)ADDR_CONFIG_SECTOR;
     SysInfo_t config_info = {0};
-    memcpy(&config_info, pConfig, sizeof(SysInfo_t));
+    _read_config(&config_info);
 
-    /* TODO(P2): 8-word master+slave status; temporary fix after dropping version[32] */
-    uint32_t ReData[3] = {0};
-    ReData[0]           = config_info.app_info.size;
-    ReData[1]           = config_info.app_info.crc32;
-    ReData[2]           = config_info.update_sta;
+    cascade_refresh_if_stale();
+    const cascade_status_t *slave = cascade_status();
+
+    uint32_t ReData[8] = {0};
+    ReData[0]          = config_info.app_info.size;
+    ReData[1]          = config_info.app_info.crc32;
+    ReData[2]          = s_receiving ? 1U : config_info.update_sta;
+
+    if (slave->online) {
+        ReData[3] = 1U;
+        ReData[4] = slave->mode;
+        ReData[5] = slave->size;
+        ReData[6] = slave->crc32;
+        ReData[7] = slave->update_sta;
+    } else {
+        ReData[3] = 0U;
+        ReData[4] = 2U;
+        ReData[5] = 0U;
+        ReData[6] = 0U;
+        ReData[7] = 3U;
+    }
 
     cmd_SendReData(IAP_Data->seq, rtn_cmd03, U32_LEN(sizeof(ReData)), ReData);
 }
+
 /**
- * @brief ×¼±¸Éı¼¶
- *
- * @param IAP_Data IAPÊı¾İ°ü
+ * @brief å‡†å¤‡å‡çº§ï¼ˆ0x04ï¼‰ï¼šåªæ“¦ä¸»å¡ main app åŒº
  */
 static void cmd_PrepareUpgrade_04(IAP_Frame_t *IAP_Data)
 {
-    uint32_t fw_size = IAP_Data->data_crc[0];
-    if (fw_size > FIRMWARE_MAXLEN)
-        return;
-
-    // ½âËø Flash ¿ØÖÆ¼Ä´æÆ÷
-    HAL_FLASH_Unlock();
-    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
-
-    // ¿ªÊ¼²Á³ı
-    uint32_t erase_sta                     = 0;
-    FLASH_EraseInitTypeDef eraseInitStruct = {
-        .TypeErase    = FLASH_TYPEERASE_SECTORS,
-        .Sector       = 6,
-        .NbSectors    = (fw_size * 4 + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE,
-        .VoltageRange = FLASH_VOLTAGE_RANGE_3,
-    };
+    uint32_t status = 3U;
 
     do {
-        uint32_t SectorError = 0;
-        if (HAL_FLASHEx_Erase(&eraseInitStruct, &SectorError) != HAL_OK) {
-            HAL_FLASH_Lock();
-            erase_sta = 1;
+        if (IAP_Data->len != 2U)
+            break;
+
+        uint32_t fw_size = IAP_Data->data_crc[0];
+        uint32_t fw_crc  = IAP_Data->data_crc[1];
+        if (fw_size == 0U || fw_size > FW_MAX_SIZE || (fw_size & 3U) != 0U)
+            break;
+        if (!cascade_is_master())
+            break;
+        if (s_receiving || cascade_is_syncing()) {
+            status = 2U;
             break;
         }
 
-        const SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
-        SysInfo_t config_info    = {0};
-        memcpy(&config_info, pConfig, sizeof(SysInfo_t));
-        config_info.app_info.size = fw_size * 4;
-        config_info.update_sta    = updating;
-        Edit_Config_Info(&config_info);
-    } while (false);
+        HAL_FLASH_Unlock();
+        __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
 
-    HAL_FLASH_Lock(); // Ëø¶¨ Flash ¿ØÖÆ¼Ä´æÆ÷
+        /* ä¸€æ¬¡åªæ“¦ä¸€ä¸ªæ‰‡åŒºå¹¶åœ¨æ‰‡åŒºä¹‹é—´åˆ· IWDGï¼š128KB æ‰‡åŒºæ“¦é™¤æœ€é•¿ 2sï¼Œ
+           6 ä¸ªæ‰‡åŒºè¿ç€æ“¦ä¼šè¶…è¿‡ 5s çš„çœ‹é—¨ç‹—çª—å£ã€‚ */
+        uint32_t sectors = (fw_size + FLASH_SECTOR_SIZE - 1U) / FLASH_SECTOR_SIZE;
+        HAL_StatusTypeDef st = HAL_OK;
+        for (uint32_t i = 0; i < sectors; i++) {
+            FLASH_EraseInitTypeDef erase = {
+                .TypeErase    = FLASH_TYPEERASE_SECTORS,
+                .Sector       = 6U + i,
+                .NbSectors    = 1,
+                .VoltageRange = FLASH_VOLTAGE_RANGE_3,
+            };
+            uint32_t sector_error = 0;
+            st = HAL_FLASHEx_Erase(&erase, &sector_error);
+            HAL_IWDG_Refresh(&hiwdg);
+            if (st != HAL_OK)
+                break;
+        }
+        HAL_FLASH_Lock();
 
-    cmd_SendReData(IAP_Data->seq, rtn_cmd04, U32_LEN(sizeof(uint32_t)), &erase_sta);
+        if (st != HAL_OK) {
+            status = 1U;
+            break;
+        }
+
+        SysInfo_t cfg      = {0};
+        _read_config(&cfg);
+        cfg.app_info.size  = fw_size;
+        cfg.app_info.crc32 = 0xFFFFFFFFU;
+        cfg.update_sta     = updating;
+        cfg.role           = role_master;
+        Edit_Config_Info(&cfg);
+
+        memset(s_bitmap, 0, sizeof(s_bitmap));
+        s_fw_size        = fw_size;
+        s_fw_crc_exp     = fw_crc;
+        s_total_frames   = (fw_size + FW_BLOCK_BYTES - 1U) / FW_BLOCK_BYTES;
+        s_last_missing_cnt = 0;
+        s_receiving      = true;
+
+        cascade_slave_mark_unknown();
+        status = 0U;
+    } while (0);
+
+    cmd_SendReData(IAP_Data->seq, rtn_cmd04, 1, &status);
 }
 
-bool timeout_flag           = false;
-uint8_t timeout_cnt         = 0;
-uint8_t bitmap[BITMAP_SIZE] = {0};
-uint16_t frame_cnt          = 0;
 /**
- * @brief  ·¢ËÍÉı¼¶°ü
- *
- * @param  IAP_Data: IAPÊı¾İ°ü
+ * @brief å‘é€å‡çº§åŒ…ï¼ˆ0x05ï¼‰ï¼šåªåœ¨æœ€åä¸€åŒ…å›ç¼ºå¤±åˆ—è¡¨
  */
 static void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
 {
-    uint16_t frame_seq       = IAP_Data->seq - 1;
-    const SysInfo_t *pConfig = (SysInfo_t *)ADDR_CONFIG_SECTOR;
-    if (pConfig->app_info.size == 0) // config_infoÖĞµÄappĞÅÏ¢´óĞ¡²»ÄÜÎª0
+    uint32_t seq = IAP_Data->seq;
+
+    /* æ”¶åŒ…ç»“æŸåé‡å¤å‘æœ€åä¸€åŒ…ï¼šå›ç¼“å­˜ç»“æœï¼Œä¸é‡å¼€ä¸€è½® */
+    if (!s_receiving) {
+        if (s_total_frames != 0U && seq == s_total_frames)
+            cmd_SendReData(0, rtn_cmd05, s_last_missing_cnt, s_last_missing);
+        return;
+    }
+
+    if (seq == 0U || seq > s_total_frames || IAP_Data->len == 0U || IAP_Data->len > FW_BLOCK_WORDS)
         return;
 
-    uint32_t max_len = (pConfig->app_info.size / 4 + 255) / 256;
-    if (frame_seq >= max_len) // °üĞòºÅ²»ÄÜ³¬¹ıÕâ¸öappµÄ×î´ó°üĞòºÅ
+    uint32_t offset = (seq - 1U) * FW_BLOCK_BYTES;
+    if (offset + IAP_Data->len * 4U > ((s_fw_size + 3U) & ~3U))
         return;
 
-    if (write_fw(frame_seq * 1024, IAP_Data->data_crc, IAP_Data->len))
-        return; // ÕâÒ»Ö¡Ğ´Èë³ö´í
+    if (!_bit_get(seq - 1U)) {
+        if (write_fw(offset, IAP_Data->data_crc, (uint16_t)IAP_Data->len) == HAL_OK)
+            _bit_set(seq - 1U);
+        /* å†™å¤±è´¥ä¸ä¸­æ­¢ï¼šè¯¥åŒ…ä¸è¿› bitmapï¼Œæœ€åä¼šå‡ºç°åœ¨ç¼ºå¤±åˆ—è¡¨é‡Œ */
+    }
 
-    // Ğ´ÈëÍê³É£¬ÔÚbitmapÖĞ±ê¼Ç
-    BITBAND_SRAM(&bitmap[frame_seq / 8], frame_seq % 8) = 1;
-    frame_cnt++;
-    timeout_flag = true; // ¿ªÆô³¬Ê±¼ÆÊ±
-    timeout_cnt  = 0;
+    if (seq != s_total_frames)
+        return;
 
-    if (frame_cnt <= max_len - 1)
-        return; // ²»ÊÇ×îºóÒ»Ö¡£¬Ôò²»ĞèÒª»Ø¸´ÖØ´«ÄÚÈİ
-    frame_cnt    = 0;
-    timeout_flag = false; // ½ÓÊÕµ½×îºóÒ»Ö¡£¬¹Ø±Õ³¬Ê±¼ÆÊ±
-
-    // ±éÀúbitmapÒÔÍ³¼ÆËùÓĞÈ±Ê§µÄÖ¡
-    uint32_t miss_frame[FIRMWARE_MAX_FRAME_NUM] = {0};
-    uint16_t miss_cnt                           = 0;
-    for (uint16_t byte_cnt = 0; byte_cnt < max_len / 8; byte_cnt++) {
-        for (uint8_t bit_cnt = 0; bit_cnt < 8; bit_cnt++) {
-            if (!BITBAND_SRAM(&bitmap[byte_cnt], bit_cnt)) {
-                miss_frame[miss_cnt] = byte_cnt * 8 + bit_cnt;
-                miss_cnt++;
-            }
+    /* æœ€åä¸€åŒ…ï¼šç»Ÿè®¡ç¼ºå¤± */
+    uint32_t missing[256];
+    uint32_t miss_cnt = 0;
+    for (uint32_t i = 0; i < s_total_frames; i++) {
+        if (!_bit_get(i)) {
+            if (miss_cnt < 256U)
+                missing[miss_cnt] = i + 1U;
+            miss_cnt++;
         }
     }
 
-    if (miss_cnt == 0) {
-        SysInfo_t config_info = {0};
-        memcpy(&config_info, pConfig, sizeof(SysInfo_t));
+    if (miss_cnt == 0U) {
+        uint32_t crc      = HAL_CRC_Calculate(&hcrc, (uint32_t *)ADDR_MAIN_APP, (s_fw_size + 3U) / 4U);
+        SysInfo_t cfg     = {0};
+        _read_config(&cfg);
+        cfg.app_info.size = s_fw_size;
 
-        // ĞŞ¸ÄÉı¼¶×´Ì¬»ú²¢±£´æÕû¸ö¹Ì¼şµÄcrcĞ£ÑéÖµ
-        config_info.app_info.crc32 = HAL_CRC_Calculate(&hcrc, (uint32_t *)ADDR_MAIN_APP, (pConfig->app_info.size + 3) / 4);
-        config_info.update_sta     = updated;
-        Edit_Config_Info(&config_info);
+        if (crc == s_fw_crc_exp) {
+            cfg.app_info.crc32 = crc;
+            cfg.update_sta     = updated;
+            Edit_Config_Info(&cfg);
+            s_receiving = false;
+            cascade_start_sync(s_fw_size, crc);
+        } else {
+            cfg.app_info.crc32 = 0xFFFFFFFFU;
+            cfg.update_sta     = failed;
+            Edit_Config_Info(&cfg);
+            s_receiving = false;
+        }
     }
 
-    // ·¢ËÍËùÓĞÈ±Ê§µÄÖ¡ÒªÇóÖØ´«
-    cmd_SendReData(0, rtn_cmd05, miss_cnt, miss_frame);
+    s_last_missing_cnt = (miss_cnt > 256U) ? 256U : miss_cnt;
+    memcpy(s_last_missing, missing, s_last_missing_cnt * sizeof(uint32_t));
+    cmd_SendReData(0, rtn_cmd05, s_last_missing_cnt, s_last_missing);
 }
 
 /**
- * @brief  ½øÈë»Ö¸´Ä£Ê½
- *
- * @param  IAP_Data: IAPÊı¾İ°ü
+ * @brief è¿›å…¥ Recoveryï¼ˆ0x06ï¼‰ï¼šä¸»å¡å·²åœ¨ Recovery æ—¶åªè¡¥å‘ä»å¡ 0x14ï¼Œä¸å¤ä½
  */
 static void cmd_EnterRecoveryMode_06(IAP_Frame_t *IAP_Data)
 {
-    // ÒÑ¾­ÔÚ»Ö¸´Ä£Ê½£¬²»ĞèÒªÔÙ½øÈë
-    // HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, FLAG_FORCE_UPDATE);
+    if (cascade_is_master())
+        cascade_ensure_slave_recovery();
 
     cmd_SendReData(IAP_Data->seq, rtn_cmd06, 0, NULL);
 }
 
 /**
- * @brief  ÖØĞÂÆô¶¯
- *
- * @param  IAP_Data: IAPÊı¾İ°ü
+ * @brief é‡å¯ä¸»å¡+ä»å¡ï¼ˆ0x07ï¼‰
  */
 static void cmd_Restart_07(IAP_Frame_t *IAP_Data)
 {
-    cmd_SendReData(IAP_Data->seq, rtn_cmd07, 0, NULL);
-    HAL_IWDG_Refresh(&hiwdg);
+    uint32_t status = 2U;
 
-    NVIC_SystemReset();
+    do {
+        if (s_receiving || cascade_is_syncing())
+            break;
+        if (!cascade_is_master())
+            break;
+
+        if (IAP_CAPS & IAP_CAP_SLAVE) {
+            if (!cascade_restart_slave(100U)) {
+                status = 1U;
+                break;
+            }
+        }
+
+        status = 0U;
+        cmd_SendReData(IAP_Data->seq, rtn_cmd07, 1, &status);
+        HAL_Delay(50);
+        HAL_IWDG_Refresh(&hiwdg);
+        NVIC_SystemReset();
+        return;
+    } while (0);
+
+    cmd_SendReData(IAP_Data->seq, rtn_cmd07, 1, &status);
+}
+
+static void cmd_Reserved_08(IAP_Frame_t *IAP_Data)
+{
+    (void)IAP_Data;
+}
+
+static void cmd_Reserved_09(IAP_Frame_t *IAP_Data)
+{
+    (void)IAP_Data;
+}
+
+static void cmd_Reserved_0A(IAP_Frame_t *IAP_Data)
+{
+    (void)IAP_Data;
+}
+
+static void cmd_Reserved_0B(IAP_Frame_t *IAP_Data)
+{
+    (void)IAP_Data;
+}
+
+/** @brief 0x0C è§¦å‘ TEST é”®ï¼šä»… main app æ”¯æŒï¼ŒRecovery ä¸åº”ç­” */
+static void cmd_TrigTestKey_0C(IAP_Frame_t *IAP_Data)
+{
+    (void)IAP_Data;
 }
 
 /**
- * @brief Ğ´Èë¹Ì¼şµ½flash(µ¥Ö¡)
- *
- * @param addr_offset Í¨¹ı°üĞòºÅ¼ÆËãµÄflashµØÖ·Æ«ÒÆ
- * @param word_len Ğ´ÈëÊı¾İµÄ³¤¶È
- * @return HAL_StatusTypeDef
+ * @brief å†™å…¥å›ºä»¶åˆ° flashï¼ˆå•å¸§ï¼‰
  */
-static HAL_StatusTypeDef write_fw(uint32_t addr_offset, uint32_t *data, uint16_t word_len)
+static HAL_StatusTypeDef write_fw(uint32_t addr_offset, const uint32_t *data, uint16_t word_len)
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
     HAL_FLASH_Unlock();
     __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
 
-    // °´wordĞ´Èë
     for (uint32_t i = 0; i < word_len; i++) {
-        status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, ADDR_MAIN_APP + addr_offset + i * 4, data[i]);
-
-        if (status != HAL_OK) {
-            break; // Ğ´Èë³ö´í£¬ÍË³ö
-        }
+        status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, ADDR_MAIN_APP + addr_offset + i * 4U, data[i]);
+        if (status != HAL_OK)
+            break;
     }
 
     HAL_FLASH_Lock();
