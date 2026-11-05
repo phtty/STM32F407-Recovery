@@ -20,6 +20,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "dma.h"
+#include "board_config.h"
 
 /* USER CODE BEGIN 0 */
 
@@ -43,13 +44,15 @@ void MX_DMA_Init(void)
     __HAL_RCC_DMA2_CLK_ENABLE();
     __HAL_RCC_DMA1_CLK_ENABLE();
 
-    /* DMA interrupt init */
+#if RECOVERY_HAS_RS232
+    /* RS232 (USART3/USART6) RX DMA; 5006048 has no RS232, leave these streams alone */
     /* DMA1_Stream1_IRQn interrupt configuration */
     HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
     /* DMA2_Stream1_IRQn interrupt configuration */
     HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
+#endif
 }
 
 /* USER CODE BEGIN 2 */

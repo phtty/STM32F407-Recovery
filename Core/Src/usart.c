@@ -57,7 +57,9 @@ void MX_USART1_UART_Init(void)
 
     /* USER CODE END USART1_Init 2 */
 }
-/* USART3 init function */
+/* USART3 init function.
+ * 3833024 only. On 5006048 PB10/PB11 are HUB75 data CH53/CH52,
+ * so MX_USART3_UART_Init() must not be called there (see board_config.h). */
 
 void MX_USART3_UART_Init(void)
 {
@@ -84,7 +86,8 @@ void MX_USART3_UART_Init(void)
 
     /* USER CODE END USART3_Init 2 */
 }
-/* USART6 init function */
+/* USART6 init function.
+ * 3833024 only; 5006048 does not call it (see board_config.h). */
 
 void MX_USART6_UART_Init(void)
 {

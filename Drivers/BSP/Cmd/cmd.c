@@ -320,7 +320,8 @@ static void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
             cfg.update_sta     = updated;
             Edit_Config_Info(&cfg);
             s_receiving = false;
-            cascade_start_sync(s_fw_size, crc);
+            if (IAP_CAPS & IAP_CAP_SLAVE)
+                cascade_start_sync(s_fw_size, crc);
         } else {
             cfg.app_info.crc32 = 0xFFFFFFFFU;
             cfg.update_sta     = failed;
@@ -339,7 +340,7 @@ static void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
  */
 static void cmd_EnterRecoveryMode_06(IAP_Frame_t *IAP_Data)
 {
-    if (cascade_is_master())
+    if ((IAP_CAPS & IAP_CAP_SLAVE) && cascade_is_master())
         cascade_ensure_slave_recovery();
 
     cmd_SendReData(IAP_Data->seq, rtn_cmd06, 0, NULL);

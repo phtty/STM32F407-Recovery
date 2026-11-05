@@ -219,6 +219,7 @@ targets:
       defineList:
         - USE_HAL_DRIVER
         - STM32F407xx
+        - RECOVERY_BOARD=5006048
       incList:
         - Core/Inc
         - Drivers/CMSIS/Device/ST/STM32F4xx/Include
@@ -309,6 +310,7 @@ targets:
       defineList:
         - USE_HAL_DRIVER
         - STM32F407xx
+        - RECOVERY_BOARD=5006048
       incList:
         - Core/Inc
         - Drivers/CMSIS/Device/ST/STM32F4xx/Include

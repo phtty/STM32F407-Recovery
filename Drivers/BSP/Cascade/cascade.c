@@ -11,6 +11,7 @@
 
 #include "cascade.h"
 #include "cascade_fsm.h"
+#include "board_config.h"
 #include "config_info.h"
 #include "rs485.h"
 #include "rtc.h"
@@ -279,6 +280,8 @@ void cascade_start_sync(uint32_t size, uint32_t crc)
 
 void cascade_refresh_if_stale(void)
 {
+    if ((RECOVERY_IAP_CAPS & 0x00000001U) == 0U)
+        return;
     if (!cascade_is_master() || cascade_is_syncing())
         return;
 
@@ -289,6 +292,9 @@ void cascade_refresh_if_stale(void)
 
 void cascade_poll(void)
 {
+    if ((RECOVERY_IAP_CAPS & 0x00000001U) == 0U)
+        return; /* 单卡板没有从卡，不查也不转发 */
+
     if (!cascade_is_master())
         return;
 
@@ -311,6 +317,8 @@ void cascade_poll(void)
 
 bool cascade_ensure_slave_recovery(void)
 {
+    if ((RECOVERY_IAP_CAPS & 0x00000001U) == 0U)
+        return false;
     if (!cascade_is_master())
         return false;
     return rs485_transact(CMD_ENTER_RCVRY, 0, NULL, 0, (IAP_Frame_t *)s_reply_buff,
@@ -319,6 +327,8 @@ bool cascade_ensure_slave_recovery(void)
 
 bool cascade_restart_slave(uint32_t delay_ms)
 {
+    if ((RECOVERY_IAP_CAPS & 0x00000001U) == 0U)
+        return false;
     if (!cascade_is_master())
         return false;
     return rs485_transact(CMD_RESTART, 0, &delay_ms, 1, (IAP_Frame_t *)s_reply_buff,
@@ -479,6 +489,8 @@ static void _slave_restart(IAP_Frame_t *f)
 
 void cascade_handle_request(IAP_Frame_t *f)
 {
+    if ((RECOVERY_IAP_CAPS & 0x00000001U) == 0U)
+        return; /* 单卡板没有从卡逻辑 */
     if (cascade_is_master())
         return; /* 主卡收到 0x4C 只可能是总线回显，不应答 */
 

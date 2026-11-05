@@ -5,18 +5,16 @@
 #include "udp_conn.h"
 #include "lwip.h"
 #include "config_info.h"
+#include "board_config.h"
 
 #define FLAG_FORCE_UPDATE (uint32_t)(0x0000DEADU)
 #define FLASH_SECTOR_SIZE (0x20000U)
 
-/* 板级能力：5006048 双卡，Recovery 只声明"支持从卡"；产线换型号时改这里 */
-#ifndef IAP_HW_ID
-#define IAP_HW_ID (0x05006048U)
-#endif
-
+/* 板级能力由 board_config.h 给出：5006048 双卡，3833024 单卡 */
 #define IAP_CAP_SLAVE   (0x00000001U)
 #define IAP_CAP_FACTORY (0x00000002U)
-#define IAP_CAPS        (IAP_CAP_SLAVE)
+#define IAP_CAPS        RECOVERY_IAP_CAPS
+#define IAP_HW_ID       RECOVERY_IAP_HW_ID
 
 /* 上位机命令表长度：0x00~0x0C，0x08~0x0B 保留 */
 #define CMD_HOST_COUNT (13U)
