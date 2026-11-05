@@ -56,6 +56,7 @@ static uint8_t s_bitmap[FW_MAX_FRAMES / 8U];
 static bool s_receiving;
 static uint32_t s_last_missing[256];
 static uint32_t s_last_missing_cnt;
+static uint32_t s_missing_tmp[256]; /* 1KB：不放在 2KB 栈上 */
 
 /**
  * @brief 构造应答帧并发送（上位机方向）
@@ -298,7 +299,7 @@ static void cmd_SendUpgradePackage_05(IAP_Frame_t *IAP_Data)
         return;
 
     /* 最后一包：统计缺失 */
-    uint32_t missing[256];
+    uint32_t *missing = s_missing_tmp;
     uint32_t miss_cnt = 0;
     for (uint32_t i = 0; i < s_total_frames; i++) {
         if (!_bit_get(i)) {
