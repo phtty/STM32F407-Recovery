@@ -20,7 +20,6 @@ virtualFolder:
             - path: Core/Src/stm32f4xx_hal_msp.c
             - path: Core/Src/system_stm32f4xx.c
             - path: Core/Src/tim.c
-            - path: Core/Src/dma.c
             - path: Core/Src/usart.c
           folders: []
         - name: Compiler
@@ -219,7 +218,6 @@ targets:
       defineList:
         - USE_HAL_DRIVER
         - STM32F407xx
-        - RECOVERY_BOARD=5006048
       incList:
         - Core/Inc
         - Drivers/CMSIS/Device/ST/STM32F4xx/Include
@@ -310,7 +308,6 @@ targets:
       defineList:
         - USE_HAL_DRIVER
         - STM32F407xx
-        - RECOVERY_BOARD=5006048
       incList:
         - Core/Inc
         - Drivers/CMSIS/Device/ST/STM32F4xx/Include

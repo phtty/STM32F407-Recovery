@@ -3,24 +3,18 @@
 
 /**
  * @file    board_config.h
- * @brief   Recovery 的板级开关（5006048 / 3833024）
+ * @brief   Recovery 的板级身份（5006048 / 3833024）
  *
- * Recovery 的 CubeMX 初始化是从 3833024 那一版延续下来的，两块板**不是**同一份
- * 引脚分布。已核对（对照 Project_STD/boards/<board>/Core/Inc/main.h）：
+ * Recovery 没有显示，也不需要 RS232：USART3/USART6 已经从本工程删掉，
+ * 所以两块板的**引脚初始化现在是同一份**（只剩 USART1/RS485、ETH、LED、时基）。
  *
- *   项目            5006048                        3833024
- *   --------------  -----------------------------  -----------------------------
- *   RS485           USART1 PA9/PA10，RE PA8        同左
- *   LED             PD9                            同左
- *   ETH RMII        PC1/4/5、PA1/2/7、PG11/13/14   同左
- *   RS232           **没有**                        USART3 PB10/PB11、USART6 PC6/PC7
- *   PB10/PB11        HUB75 数据 CH53/CH52           RS232 TX/RX
+ * 仍保留这个头，是因为 0x00 要上报不同的 hw_id / caps：
+ *   5006048：hw_id=0x05006048，caps.bit0=1（有从卡）
+ *   3833024：hw_id=0x03833024，caps=0（单卡）
  *
- * 所以 5006048 上**绝不能**调用 MX_USART3_UART_Init()：它会把 PB10/PB11 配成
- * USART3 的 AF，直接抢走 HUB75 的两根数据线。USART6 的 PC6/PC7 在 5006048 上
- * 未使用，但同样没有保留的必要，一起关掉。
- *
- * 构建时用 -DRECOVERY_BOARD=5006048 或 3833024 选择；不定义时默认当前产品 5006048。
+ * 构建时用 -DRECOVERY_BOARD=5006048 或 3833024 选择；不定义时默认 5006048。
+ * 如果以后要求"一个 Recovery 镜像同时认两块板"，需要给 hw_id 一个运行期来源
+ * （配置区字段/板级 ID 脚），不能继续用编译期宏。
  */
 
 #ifndef RECOVERY_BOARD
@@ -29,12 +23,10 @@
 
 #if RECOVERY_BOARD == 5006048
 #define RECOVERY_BOARD_NAME "5006048"
-#define RECOVERY_HAS_RS232  0
 #define RECOVERY_IAP_HW_ID  0x05006048U
 #define RECOVERY_IAP_CAPS   0x00000001U /* bit0：支持从卡 */
 #elif RECOVERY_BOARD == 3833024
 #define RECOVERY_BOARD_NAME "3833024"
-#define RECOVERY_HAS_RS232  1
 #define RECOVERY_IAP_HW_ID  0x03833024U
 #define RECOVERY_IAP_CAPS   0x00000000U /* 单卡，无从卡；Recovery 也没有工厂测试 */
 #else

@@ -19,7 +19,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "crc.h"
-#include "dma.h"
 #include "iwdg.h"
 #include "lwip.h"
 #include "rtc.h"
@@ -30,7 +29,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "config_info.h"
-#include "board_config.h"
 #include "rs485.h"
 #include "cascade.h"
 #include "udp_conn.h"
@@ -100,7 +98,6 @@ int main(void)
 
     /* Initialize all configured peripherals */
     MX_GPIO_Init();
-    MX_DMA_Init();
     MX_CRC_Init();
     MX_IWDG_Init();
     MX_RTC_Init();
@@ -108,10 +105,6 @@ int main(void)
     MX_LWIP_Init();
     MX_TIM3_Init();
     MX_USART1_UART_Init();
-#if RECOVERY_HAS_RS232
-    MX_USART3_UART_Init();
-    MX_USART6_UART_Init();
-#endif
     rs485_init(); // internal 485: USART1 + RE(PA8)
     cascade_init();
     /* USER CODE BEGIN 2 */
