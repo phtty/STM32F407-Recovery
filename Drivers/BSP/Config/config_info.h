@@ -24,15 +24,21 @@ __attribute__((aligned(4))) typedef struct {
 __attribute__((aligned(4))) typedef struct {
     uint32_t size;  // Main App的字节长度
     uint32_t crc32; // Main App的CRC32值
-    char version[32];
 } FWInfo_t;
 
-// 应该定义在0x08004000
+// 卡角色（main app 进 Recovery 前写入，Recovery 据此决定跑主卡还是从卡逻辑）
+typedef enum {
+    role_master = 0, // 主卡：接网口，收主机固件并转发从卡
+    role_slave  = 1, // 从卡：只应答内部 485
+} CardRole_t;
+
+// 应该定义在0x08004000，共 40 字节
 __attribute__((aligned(4))) typedef struct {
     uint32_t magic;      // 魔数，判断配置区是否有效
     uint32_t update_sta; // 升级状态机
-    FWInfo_t app_info;   // main_app状态
-    NetConfig_t net_cfg; // 网络配置
+    FWInfo_t app_info;   // main_app状态（8 字节）
+    NetConfig_t net_cfg; // 网络配置（16 字节）
+    uint32_t role;       // 卡角色，取值见 CardRole_t
     uint32_t config_crc; // 本结构体自身的校验
 } SysInfo_t;
 

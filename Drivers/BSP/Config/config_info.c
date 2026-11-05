@@ -64,6 +64,8 @@ void Init_Config_Info(SysInfo_t *info)
     };
     memcpy(&(info->net_cfg), &net_info, sizeof(NetConfig_t));
 
+    info->role = role_master; // 默认主卡；从卡由 main app 进入 Recovery 前改写
+
     // 计算config info的crc校验值
     info->config_crc = HAL_CRC_Calculate(&hcrc, (uint32_t *)info, (sizeof(SysInfo_t) - sizeof(info->config_crc)) / 4);
 
@@ -122,6 +124,8 @@ HAL_StatusTypeDef EraseConfigInfo(void)
  */
 HAL_StatusTypeDef WriteConfigInfo(SysInfo_t *info)
 {
+    _Static_assert(sizeof(SysInfo_t) == 40, "SysInfo_t must be 40 bytes");
+
     HAL_StatusTypeDef status = HAL_ERROR;
 
     HAL_FLASH_Unlock();
