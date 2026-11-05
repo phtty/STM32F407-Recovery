@@ -44,6 +44,7 @@ static uint32_t s_sync_crc;
 static uint32_t s_sync_block;  /* 1-based */
 static uint32_t s_sync_blocks; /* total blocks */
 static uint8_t s_block_retry;
+static bool s_sync_failed; /* 同步失败后锁住状态，0x03 必须看到 2，不能被后续查询覆盖 */
 
 static uint32_t s_reply_buff[FRAME_MAX_LEN];
 
@@ -82,6 +83,7 @@ void cascade_init(void)
     s_sync_block  = 1;
     s_sync_blocks = 0;
     s_block_retry = 0;
+    s_sync_failed = false;
 }
 
 const cascade_status_t *cascade_status(void)
@@ -96,6 +98,7 @@ bool cascade_is_syncing(void)
 
 void cascade_slave_mark_unknown(void)
 {
+    s_sync_failed = false;
     _set_slave_unknown();
     /* 主卡正在收主机固件：这段时间不主动查从卡，避免 3 次重试把主循环拖住 */
     s_next_query_tick = HAL_GetTick() + 60000U;
@@ -107,6 +110,9 @@ void cascade_slave_mark_unknown(void)
 
 static void _query_status(void)
 {
+    if (s_sync_failed)
+        return; /* 失败状态保持到主机重新 0x04 或重新 0x06 */
+
     if (!rs485_transact(CMD_QUERY_STATUS, 0, NULL, 0, (IAP_Frame_t *)s_reply_buff,
                         RS485_TIMEOUT_MS, RS485_RETRIES)) {
         s_slave.online = false;
@@ -130,6 +136,7 @@ static void _query_status(void)
 
 static void _sync_fail(void)
 {
+    s_sync_failed      = true;
     s_slave.online     = true; /* 有应答，只是失败 */
     s_slave.update_sta = 2;
     s_sync_state       = sync_idle;
@@ -191,6 +198,7 @@ static void _sync_step(void)
         s_slave.update_sta = 0;
         s_slave.size       = s_sync_size;
         s_slave.crc32      = s_sync_crc;
+        s_sync_failed      = false;
         s_sync_state       = sync_idle;
         s_next_query_tick  = HAL_GetTick() + 1000U;
         break;
@@ -204,6 +212,7 @@ static void _sync_step(void)
 
 void cascade_start_sync(uint32_t size, uint32_t crc)
 {
+    s_sync_failed = false;
     s_sync_size   = size;
     s_sync_crc    = crc;
     s_sync_block  = 1;
