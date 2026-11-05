@@ -10,6 +10,7 @@
  */
 
 #include "cascade.h"
+#include "cascade_fsm.h"
 #include "config_info.h"
 #include "rs485.h"
 #include "rtc.h"
@@ -28,25 +29,18 @@
 #define SYNC_BLOCK_BYTES (1024U)
 #define FLASH_SECTOR_SIZE (0x20000U)
 
-typedef enum {
-    sync_idle = 0,
-    sync_enter,   /* 先确认/让从卡进 Recovery */
-    sync_prepare,
-    sync_blocks,
-    sync_verify,
-} sync_state_t;
-
 static cascade_status_t s_slave;
 static uint32_t s_next_query_tick;
 
+/* 转发会话数据：状态本身只表示"走到哪一步"，这些是动作要用的上下文 */
 static sync_state_t s_sync_state;
 static uint32_t s_sync_size;
 static uint32_t s_sync_crc;
-static uint32_t s_sync_block;  /* 1-based */
-static uint32_t s_sync_blocks; /* total blocks */
+static uint32_t s_sync_block;   /* 1-based */
+static uint32_t s_sync_blocks;  /* total blocks */
 static uint8_t s_block_retry;
 static uint32_t s_sync_wait_tick;
-static bool s_sync_failed; /* 同步失败后锁住状态，0x03 必须看到 2，不能被后续查询覆盖 */
+static bool s_last_acked;       /* 最近一次 485 事务有没有应答，失败态用它记 online */
 
 static uint32_t s_reply_buff[FRAME_MAX_LEN];
 
@@ -77,13 +71,13 @@ void cascade_init(void)
     s_slave.tick       = 0;
     s_next_query_tick  = 0;
 
-    s_sync_state  = sync_idle;
+    s_sync_state  = SYNC_IDLE;
     s_sync_size   = 0;
     s_sync_crc    = 0;
     s_sync_block  = 1;
     s_sync_blocks = 0;
     s_block_retry = 0;
-    s_sync_failed = false;
+    s_last_acked  = false;
 }
 
 const cascade_status_t *cascade_status(void)
@@ -93,12 +87,12 @@ const cascade_status_t *cascade_status(void)
 
 bool cascade_is_syncing(void)
 {
-    return s_sync_state != sync_idle;
+    return sync_state_active(s_sync_state);
 }
 
 void cascade_slave_mark_unknown(void)
 {
-    s_sync_failed = false;
+    s_sync_state = SYNC_IDLE;
     _set_slave_unknown();
     /* 主卡正在收主机固件：这段时间不主动查从卡，避免 3 次重试把主循环拖住 */
     s_next_query_tick = HAL_GetTick() + 60000U;
@@ -110,7 +104,7 @@ void cascade_slave_mark_unknown(void)
 
 static void _query_status(void)
 {
-    if (s_sync_failed)
+    if (s_sync_state == SYNC_FAILED)
         return; /* 失败状态保持到主机重新 0x04 或重新 0x06 */
 
     if (!rs485_transact(CMD_QUERY_STATUS, 0, NULL, 0, (IAP_Frame_t *)s_reply_buff,
@@ -134,107 +128,146 @@ static void _query_status(void)
     s_slave.tick   = HAL_GetTick();
 }
 
-static void _sync_fail(bool acked)
+/* ---- 状态动作：每个状态一次 poll 最多做一个 485 事务，返回事件 ---- */
+
+/** @brief 进入 prepare：从卡可能刚从 main app 复位，给它 1.5s 起 Recovery */
+static void _enter_prepare(void)
 {
-    s_sync_failed      = true;
-    s_slave.online     = acked;
+    s_sync_wait_tick = HAL_GetTick() + 1500U;
+}
+
+/** @brief 进入 blocks：复位块号/重试次数，0x03 显示 slave_update=1 */
+static void _enter_blocks(void)
+{
+    s_slave.update_sta = 1;
+    s_sync_block       = 1;
+    s_block_retry      = 0;
+}
+
+/** @brief 进入 failed：锁住 slave_update=2，暂停后台 0x10 查询 */
+static void _enter_failed(void)
+{
+    s_slave.online     = s_last_acked;
     s_slave.update_sta = 2;
-    s_sync_state       = sync_idle;
     s_next_query_tick  = HAL_GetTick();
 }
 
-static void _sync_step(void)
+/** @brief 协议 6.3 第 1 步：确保从卡在 Recovery */
+static sync_event_t _run_enter(void)
 {
-    IAP_Frame_t *r = (IAP_Frame_t *)s_reply_buff;
+    s_last_acked = rs485_transact(CMD_ENTER_RCVRY, 0, NULL, 0, (IAP_Frame_t *)s_reply_buff,
+                                  RS485_TIMEOUT_MS, RS485_RETRIES);
+    return s_last_acked ? SYNC_EV_ACK : SYNC_EV_FAIL;
+}
 
-    switch (s_sync_state) {
-    case sync_enter: {
-        /* 协议 6.3 第 1 步：先确保从卡在 Recovery。已经在 Recovery 的从卡只回 ACK；
-           还在 main app 的从卡会落 role、置标志并复位，给 500ms 让它重新起来。 */
-        bool acked = rs485_transact(CMD_ENTER_RCVRY, 0, NULL, 0, r, RS485_TIMEOUT_MS, RS485_RETRIES);
-        if (!acked) {
-            _sync_fail(false);
-            break;
-        }
-        s_sync_wait_tick = HAL_GetTick() + 1500U;
-        s_sync_state     = sync_prepare;
-        break;
-    }
+/** @brief 0x11：从卡擦 main app 区，擦完才应答，所以用 15s 专用超时且不重试 */
+static sync_event_t _run_prepare(void)
+{
+    if ((int32_t)(HAL_GetTick() - s_sync_wait_tick) < 0)
+        return SYNC_EV_WAIT;
 
-    case sync_prepare: {
-        if ((int32_t)(HAL_GetTick() - s_sync_wait_tick) < 0)
-            break;
-        uint32_t req[2] = {s_sync_size, s_sync_crc};
-        /* 0x11 里从卡要擦 main app 区：单扇区最长 2s，最多 6 个扇区，
-           用 15s 专用超时且不重试（重试会重复擦除）。 */
-        bool acked = rs485_transact(CMD_PREPARE, 0, req, 2, r, 15000U, 0U);
-        if (!acked || r->len != 1U || r->data_crc[0] != 0U) {
-            _sync_fail(acked);
-            break;
-        }
-        s_slave.update_sta = 1;
-        s_sync_block       = 1;
-        s_block_retry      = 0;
-        s_sync_state       = sync_blocks;
-        break;
-    }
+    uint32_t req[2] = {s_sync_size, s_sync_crc};
+    IAP_Frame_t *r  = (IAP_Frame_t *)s_reply_buff;
 
-    case sync_blocks: {
-        uint32_t offset = (s_sync_block - 1U) * SYNC_BLOCK_BYTES;
-        uint32_t remain = s_sync_size - offset;
-        uint32_t words  = (remain >= SYNC_BLOCK_BYTES ? SYNC_BLOCK_BYTES : remain) / 4U;
-        const uint32_t *data = (const uint32_t *)(ADDR_MAIN_APP + offset);
+    s_last_acked = rs485_transact(CMD_PREPARE, 0, req, 2, r, 15000U, 0U);
+    if (s_last_acked && r->len == 1U && r->data_crc[0] == 0U)
+        return SYNC_EV_ACK;
+    return SYNC_EV_FAIL;
+}
 
-        bool acked = rs485_transact(CMD_WRITE_BLOCK, s_sync_block, data, (uint16_t)words, r,
-                                    RS485_TIMEOUT_MS, RS485_RETRIES);
-        if (!acked || r->len != 1U || r->data_crc[0] != 0U) {
-            if (++s_block_retry >= 3U) {
-                _sync_fail(acked);
-            }
-            break;
-        }
+/** @brief 0x12：一次发一块；成功 block++，失败累计 3 次转 fail */
+static sync_event_t _run_blocks(void)
+{
+    uint32_t offset = (s_sync_block - 1U) * SYNC_BLOCK_BYTES;
+    uint32_t remain = s_sync_size - offset;
+    uint32_t words  = (remain >= SYNC_BLOCK_BYTES ? SYNC_BLOCK_BYTES : remain) / 4U;
+    const uint32_t *data = (const uint32_t *)(ADDR_MAIN_APP + offset);
+    IAP_Frame_t *r       = (IAP_Frame_t *)s_reply_buff;
 
+    s_last_acked = rs485_transact(CMD_WRITE_BLOCK, s_sync_block, data, (uint16_t)words, r,
+                                  RS485_TIMEOUT_MS, RS485_RETRIES);
+    if (s_last_acked && r->len == 1U && r->data_crc[0] == 0U) {
         s_block_retry = 0;
         s_sync_block++;
-        if (s_sync_block > s_sync_blocks) {
-            s_sync_state = sync_verify;
-        }
-        break;
+        return (s_sync_block > s_sync_blocks) ? SYNC_EV_DONE : SYNC_EV_ACK;
     }
 
-    case sync_verify: {
-        uint32_t req[2] = {s_sync_size, s_sync_crc};
-        bool acked = rs485_transact(CMD_VERIFY, 0, req, 2, r, RS485_TIMEOUT_MS, RS485_RETRIES);
-        if (!acked || r->len != 2U || r->data_crc[0] != 0U || r->data_crc[1] != s_sync_crc) {
-            _sync_fail(acked);
-            break;
-        }
+    s_block_retry++;
+    return (s_block_retry >= 3U) ? SYNC_EV_FAIL : SYNC_EV_RETRY;
+}
+
+/** @brief 0x13：从卡算整包 CRC；一致才置 slave_update=0 */
+static sync_event_t _run_verify(void)
+{
+    uint32_t req[2] = {s_sync_size, s_sync_crc};
+    IAP_Frame_t *r  = (IAP_Frame_t *)s_reply_buff;
+
+    s_last_acked = rs485_transact(CMD_VERIFY, 0, req, 2, r, RS485_TIMEOUT_MS, RS485_RETRIES);
+    if (s_last_acked && r->len == 2U && r->data_crc[0] == 0U && r->data_crc[1] == s_sync_crc) {
         s_slave.online     = true;
         s_slave.update_sta = 0;
         s_slave.size       = s_sync_size;
         s_slave.crc32      = s_sync_crc;
-        s_sync_failed      = false;
-        s_sync_state       = sync_idle;
         s_next_query_tick  = HAL_GetTick() + 1000U;
-        break;
+        return SYNC_EV_DONE;
     }
+    return SYNC_EV_FAIL;
+}
 
-    default:
-        s_sync_state = sync_idle;
-        break;
-    }
+/* ---- 状态表：状态 → 本次 poll 做哪个事务 / 进入该状态时复位什么 ---- */
+typedef sync_event_t (*sync_run_fn_t)(void);
+typedef void (*sync_enter_fn_t)(void);
+
+typedef struct {
+    sync_state_t state;
+    sync_run_fn_t run;
+    sync_enter_fn_t on_enter;
+} sync_state_def_t;
+
+static const sync_state_def_t s_sync_defs[] = {
+    [SYNC_IDLE]    = {SYNC_IDLE, NULL, NULL},
+    [SYNC_ENTER]   = {SYNC_ENTER, _run_enter, NULL},
+    [SYNC_PREPARE] = {SYNC_PREPARE, _run_prepare, _enter_prepare},
+    [SYNC_BLOCKS]  = {SYNC_BLOCKS, _run_blocks, _enter_blocks},
+    [SYNC_VERIFY]  = {SYNC_VERIFY, _run_verify, NULL},
+    [SYNC_FAILED]  = {SYNC_FAILED, NULL, _enter_failed},
+};
+
+static const sync_state_def_t *_sync_def(sync_state_t state)
+{
+    if (state >= SYNC_STATE_COUNT)
+        return NULL;
+    return &s_sync_defs[state];
+}
+
+/** @brief 一次 poll 推进一步：动作返回事件 → 查转移表 → 执行目标状态的进入动作 */
+static void _sync_step(void)
+{
+    const sync_state_def_t *def = _sync_def(s_sync_state);
+    if (def == NULL || def->run == NULL)
+        return;
+
+    sync_event_t event = def->run();
+    sync_state_t next  = sync_fsm_next(s_sync_state, event);
+    if (next == s_sync_state)
+        return;
+
+    s_sync_state = next;
+
+    const sync_state_def_t *next_def = _sync_def(next);
+    if (next_def != NULL && next_def->on_enter != NULL)
+        next_def->on_enter();
 }
 
 void cascade_start_sync(uint32_t size, uint32_t crc)
 {
-    s_sync_failed = false;
     s_sync_size   = size;
     s_sync_crc    = crc;
     s_sync_block  = 1;
     s_sync_blocks = (size + SYNC_BLOCK_BYTES - 1U) / SYNC_BLOCK_BYTES;
-    s_block_retry    = 0;
-    s_sync_wait_tick = HAL_GetTick();
-    s_sync_state     = sync_enter;
+    s_block_retry = 0;
+    s_last_acked  = false;
+    s_sync_state  = SYNC_ENTER;
 
     s_slave.online     = true;
     s_slave.mode       = 1;
@@ -259,7 +292,10 @@ void cascade_poll(void)
     if (!cascade_is_master())
         return;
 
-    if (s_sync_state != sync_idle) {
+    if (s_sync_state == SYNC_FAILED)
+        return; /* 等主机重新 0x04/0x06，期间不查、不推进 */
+
+    if (sync_state_active(s_sync_state)) {
         _sync_step();
         HAL_IWDG_Refresh(&hiwdg);
         return;

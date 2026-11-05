@@ -94,6 +94,7 @@ virtualFolder:
             - name: Cascade
               files:
                 - path: Drivers/BSP/Cascade/cascade.c
+                - path: Drivers/BSP/Cascade/cascade_fsm.c
               folders: []
         - name: RTT
           files:
