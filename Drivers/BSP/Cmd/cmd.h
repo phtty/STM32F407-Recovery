@@ -10,11 +10,16 @@
 #define FLAG_FORCE_UPDATE (uint32_t)(0x0000DEADU)
 #define FLASH_SECTOR_SIZE (0x20000U)
 
-/* 板级能力由 board_config.h 给出：5006048 双卡，3833024 单卡 */
+/* 板级能力：默认取 board_config.h；EIDE 两套 target 也可以直接 -DIAP_HW_ID/-DIAP_CAPS 覆盖 */
 #define IAP_CAP_SLAVE   (0x00000001U)
 #define IAP_CAP_FACTORY (0x00000002U)
-#define IAP_CAPS        RECOVERY_IAP_CAPS
-#define IAP_HW_ID       RECOVERY_IAP_HW_ID
+
+#ifndef IAP_CAPS
+#define IAP_CAPS RECOVERY_IAP_CAPS
+#endif
+#ifndef IAP_HW_ID
+#define IAP_HW_ID RECOVERY_IAP_HW_ID
+#endif
 
 /* 上位机命令表长度：0x00~0x0C，0x08~0x0B 保留 */
 #define CMD_HOST_COUNT (13U)
