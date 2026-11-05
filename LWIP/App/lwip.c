@@ -75,25 +75,13 @@ void MX_LWIP_Init(void)
     GATEWAY_ADDRESS[3] = 1;
 
     /* USER CODE BEGIN IP_ADDRESSES */
-    /* 板级网络配置（Sector1）优先：有效记录（magic + CRC 校验通过）用 net_cfg 配置 netif，
-     * 空/无效回退上方出厂默认常量（与主固件/Bootloader 出厂默认统一）。
-     * 时序：MX_LWIP_Init 早于 main 中 config 判空/初始化代码，故在此自行直读 Sector1；
-     * Is_Config_Integrity 仅用 HAL CRC，无 RTOS 依赖，可于 main 早期调用。 */
-    const SysInfo_t *p_cfg = (const SysInfo_t *)ADDR_CONFIG_SECTOR;
-    if (Is_Config_Integrity(p_cfg)) {
-        IP_ADDRESS[0]      = p_cfg->net_cfg.ip[0];
-        IP_ADDRESS[1]      = p_cfg->net_cfg.ip[1];
-        IP_ADDRESS[2]      = p_cfg->net_cfg.ip[2];
-        IP_ADDRESS[3]      = p_cfg->net_cfg.ip[3];
-        NETMASK_ADDRESS[0] = p_cfg->net_cfg.mask[0];
-        NETMASK_ADDRESS[1] = p_cfg->net_cfg.mask[1];
-        NETMASK_ADDRESS[2] = p_cfg->net_cfg.mask[2];
-        NETMASK_ADDRESS[3] = p_cfg->net_cfg.mask[3];
-        GATEWAY_ADDRESS[0] = p_cfg->net_cfg.gw[0];
-        GATEWAY_ADDRESS[1] = p_cfg->net_cfg.gw[1];
-        GATEWAY_ADDRESS[2] = p_cfg->net_cfg.gw[2];
-        GATEWAY_ADDRESS[3] = p_cfg->net_cfg.gw[3];
-    }
+    /* Recovery 固定 192.168.114.200，不读 Sector1 的 net_cfg。
+     *
+     * net_cfg 是 **main app 的自定义 IP**：main app 在 0x06 前会把自己的运行时 IP
+     * 同步进这条记录。如果 Recovery 也跟着这条记录走，设备复位后就会停在 main app
+     * 的网段（例如 5006048 的 192.168.1.100），主机必须猜 Recovery 的地址，升级入口
+     * 就不固定了。因此 Recovery 的升级入口必须与 main app IP 解耦，固定用
+     * 192.168.114.200/24、网关 192.168.114.1；net_cfg 只供 0x01/0x02 和 main app 使用。 */
     /* USER CODE END IP_ADDRESSES */
 
     /* Initialize the LwIP stack without RTOS */
