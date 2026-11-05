@@ -10,15 +10,15 @@ uint8_t ptcl_buff[FRAME_MAX_LEN * 4] = {0};
 
 IAP_CmdDir_t iap_cmd_dir(uint32_t cmd)
 {
-    if ((cmd & 0xFFFF0000U) != 0U)
-        return iap_dir_none;
+    uint32_t dir  = (cmd >> 8) & 0xFFU;
+    uint32_t addr = (cmd >> 16) & 0xFFFFU;
 
-    uint32_t dir = (cmd >> 8) & 0xFFU;
-    if (dir == FRAME_DIR_HOST)
+    /* 上位机命令地址恒为 0；内部命令地址 1=从卡，应答地址 0=主卡 */
+    if (dir == FRAME_DIR_HOST && addr == 0U)
         return iap_dir_host;
-    if (dir == FRAME_DIR_TO_SLAVE)
+    if (dir == FRAME_DIR_TO_SLAVE && addr == 1U)
         return iap_dir_to_slave;
-    if (dir == FRAME_DIR_FROM_SLAVE)
+    if (dir == FRAME_DIR_FROM_SLAVE && addr == 0U)
         return iap_dir_from_slave;
     return iap_dir_none;
 }
