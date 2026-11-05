@@ -30,6 +30,7 @@
 
 typedef enum {
     sync_idle = 0,
+    sync_enter,   /* 先确认/让从卡进 Recovery */
     sync_prepare,
     sync_blocks,
     sync_verify,
@@ -44,6 +45,7 @@ static uint32_t s_sync_crc;
 static uint32_t s_sync_block;  /* 1-based */
 static uint32_t s_sync_blocks; /* total blocks */
 static uint8_t s_block_retry;
+static uint32_t s_sync_wait_tick;
 static bool s_sync_failed; /* 同步失败后锁住状态，0x03 必须看到 2，不能被后续查询覆盖 */
 
 static uint32_t s_reply_buff[FRAME_MAX_LEN];
@@ -146,7 +148,22 @@ static void _sync_step(void)
     IAP_Frame_t *r = (IAP_Frame_t *)s_reply_buff;
 
     switch (s_sync_state) {
+    case sync_enter: {
+        /* 协议 6.3 第 1 步：先确保从卡在 Recovery。已经在 Recovery 的从卡只回 ACK；
+           还在 main app 的从卡会落 role、置标志并复位，给 500ms 让它重新起来。 */
+        bool acked = rs485_transact(CMD_ENTER_RCVRY, 0, NULL, 0, r, RS485_TIMEOUT_MS, RS485_RETRIES);
+        if (!acked) {
+            _sync_fail(false);
+            break;
+        }
+        s_sync_wait_tick = HAL_GetTick() + 1500U;
+        s_sync_state     = sync_prepare;
+        break;
+    }
+
     case sync_prepare: {
+        if ((int32_t)(HAL_GetTick() - s_sync_wait_tick) < 0)
+            break;
         uint32_t req[2] = {s_sync_size, s_sync_crc};
         /* 0x11 里从卡要擦 main app 区：单扇区最长 2s，最多 6 个扇区，
            用 15s 专用超时且不重试（重试会重复擦除）。 */
@@ -215,8 +232,9 @@ void cascade_start_sync(uint32_t size, uint32_t crc)
     s_sync_crc    = crc;
     s_sync_block  = 1;
     s_sync_blocks = (size + SYNC_BLOCK_BYTES - 1U) / SYNC_BLOCK_BYTES;
-    s_block_retry = 0;
-    s_sync_state  = sync_prepare;
+    s_block_retry    = 0;
+    s_sync_wait_tick = HAL_GetTick();
+    s_sync_state     = sync_enter;
 
     s_slave.online     = true;
     s_slave.mode       = 1;
