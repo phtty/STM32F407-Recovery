@@ -358,7 +358,16 @@ static void cmd_Restart_07(IAP_Frame_t *IAP_Data)
         if (!cascade_is_master())
             break;
 
+        /* 主卡自身升级必须已完成；否则复位会回到半升级状态 */
+        SysInfo_t cfg = {0};
+        _read_config(&cfg);
+        if (cfg.update_sta != updated)
+            break;
+
         if (IAP_CAPS & IAP_CAP_SLAVE) {
+            const cascade_status_t *sl = cascade_status();
+            if (!sl->online || sl->update_sta != 0U)
+                break;
             if (!cascade_restart_slave(100U)) {
                 status = 1U;
                 break;
