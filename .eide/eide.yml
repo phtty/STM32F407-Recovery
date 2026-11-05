@@ -213,11 +213,12 @@ outDir: build
 miscInfo:
   uid: 510ec07e60a3ebd3f10047946db50aec
 targets:
-  Debug:
+  "3833024":
     cppPreprocessAttrs:
       defineList:
         - USE_HAL_DRIVER
         - STM32F407xx
+        - RECOVERY_BOARD=3833024
       incList:
         - Core/Inc
         - Drivers/CMSIS/Device/ST/STM32F4xx/Include
@@ -303,11 +304,12 @@ targets:
         speed: 10000
         target: STM32F407ZG
     uploader: probe-rs
-  Release:
+  "5006048":
     cppPreprocessAttrs:
       defineList:
         - USE_HAL_DRIVER
         - STM32F407xx
+        - RECOVERY_BOARD=5006048
       incList:
         - Core/Inc
         - Drivers/CMSIS/Device/ST/STM32F4xx/Include
@@ -350,7 +352,7 @@ targets:
             no-use-cxa-atexit: true
             one-elf-section-per-data: true
             one-elf-section-per-function: true
-            optimization: level-size
+            optimization: level-0
             warnings: all-warnings
           global:
             $float-abi-type: hard
@@ -390,6 +392,6 @@ targets:
         bin: ${ExecutableName}.elf
         otherOptions: ""
         protocol: swd
-        speed: 8000
+        speed: 10000
         target: STM32F407ZG
-    uploader: OpenOCD
+    uploader: probe-rs
