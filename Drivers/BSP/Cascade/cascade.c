@@ -386,7 +386,7 @@ static void _slave_verify(IAP_Frame_t *f)
     memcpy(&cfg, (const void *)ADDR_CONFIG_SECTOR, sizeof(cfg));
 
     if (f->len != 2U || !Is_Config_Integrity(&cfg)) {
-        out[0] = 3;
+        out[0] = 1;
         rs485_send_frame(REPLY(CMD_VERIFY), f->seq, out, 2);
         return;
     }
